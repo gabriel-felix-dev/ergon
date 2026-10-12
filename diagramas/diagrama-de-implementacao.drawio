@@ -1,0 +1,161 @@
+<mxfile host="Electron">
+  <diagram name="Página-1" id="1HviPhHOJWxCuXnikQb0">
+    <mxGraphModel dx="1255" dy="758" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="1">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <UserObject label="" plantUmlData="{&#xa;  &quot;data&quot;: &quot;@startuml\ntitle Sistema de Controle para Assistências Técnicas\\nDiagrama de Implantação\n\nleft to right direction\nskinparam componentStyle rectangle\n\nnode \&quot;Dispositivo do usuário\&quot; &lt;&lt;device&gt;&gt; as Dispositivo {\n  artifact \&quot;Navegador Web\&quot; as Navegador\n  artifact \&quot;Aplicativo móvel\\n(futuro)\&quot; as AppMovel\n}\n\ncloud \&quot;Cloudflare\&quot; as Cloudflare {\n  node \&quot;Cloudflare Pages\&quot; as Pages {\n    artifact \&quot;Frontend React\\nHTML, CSS e JavaScript\&quot; as React\n  }\n\n  node \&quot;Cloudflare Workers\&quot; as Workers {\n    node \&quot;Python Worker\&quot; as PythonWorker {\n      artifact \&quot;API Flask\\nexecutada com adaptador WSGI\&quot; as Flask\n    }\n  }\n}\n\ncloud \&quot;Supabase\&quot; as Supabase {\n  database \&quot;PostgreSQL\\nBanco de dados\&quot; as Postgres\n}\n\nNavegador --&gt; Pages : HTTPS\\nbaixa os arquivos React\nNavegador --&gt; PythonWorker : HTTPS / REST\\nsolicitações e respostas JSON\nAppMovel ..&gt; PythonWorker : HTTPS / REST\\nquando o app for criado\nPythonWorker --&gt; Postgres : conexão PostgreSQL segura\\nconsulta e gravação de dados\n\nnote right of React\n  O React é baixado pelo navegador\n  e executa no dispositivo do usuário.\nend note\n\nnote right of Flask\n  O Python Worker executa as rotas Flask\n  para processar as solicitações da API.\nend note\n\nnote right of Postgres\n  Os dados ficam guardados no Supabase,\n  separados por assistência pelo assistenciaId.\nend note\n\n@enduml&quot;,&#xa;  &quot;config&quot;: null&#xa;}" id="zf8hB2FzxMNuZCbgKiw7-1">
+          <mxCell connectable="0" parent="1" style="group;transparentBounds=1;editIcon=1;lockedGroup=0;groupPadding=10;labelBackgroundColor=none;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="«device»&#xa;Dispositivo do usuário" plantUmlId="c_0" plantUmlBaseStyle="shape=cube;size=10;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=12;fontSize=14;fontStyle=1;whiteSpace=wrap;" plantUmlBaseValue="«device»&#xa;Dispositivo do usuário" id="zf8hB2FzxMNuZCbgKiw7-2">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-1" style="shape=cube;size=10;fillColor=none;verticalAlign=top;align=center;spacingTop=12;fontSize=14;fontStyle=1;whiteSpace=wrap;labelBackgroundColor=none;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="117" width="349" x="30" y="133" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Navegador Web" plantUmlId="n_1" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;" plantUmlBaseValue="Navegador Web" id="zf8hB2FzxMNuZCbgKiw7-3">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-2" style="rounded=1;absoluteArcSize=1;arcSize=5;fontSize=14;whiteSpace=wrap;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="40" width="132" x="17.5" y="58" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" plantUmlId="ci_2" plantUmlBaseStyle="shape=note;size=6;fillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;" plantUmlBaseValue="" id="zf8hB2FzxMNuZCbgKiw7-4">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-2" style="shape=note;size=6;strokeWidth=0.5;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="14" width="12" x="132.5" y="63" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Aplicativo móvel&#xa;(futuro)" plantUmlId="n_3" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;" plantUmlBaseValue="Aplicativo móvel&#xa;(futuro)" id="zf8hB2FzxMNuZCbgKiw7-5">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-2" style="rounded=1;absoluteArcSize=1;arcSize=5;fontSize=14;whiteSpace=wrap;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="46" width="137" x="187" y="55" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" plantUmlId="ci_4" plantUmlBaseStyle="shape=note;size=6;fillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;" plantUmlBaseValue="" id="zf8hB2FzxMNuZCbgKiw7-6">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-2" style="shape=note;size=6;strokeWidth=0.5;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="14" width="12" x="307" y="60" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Cloudflare" plantUmlId="c_5" plantUmlBaseStyle="shape=mxgraph.basic.cloud_rect;html=1;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=8;fontSize=14;fontStyle=1;whiteSpace=wrap;" plantUmlBaseValue="Cloudflare" id="zf8hB2FzxMNuZCbgKiw7-7">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-1" style="shape=mxgraph.basic.cloud_rect;html=1;fillColor=none;verticalAlign=top;align=center;spacingTop=8;fontSize=14;fontStyle=1;whiteSpace=wrap;labelBackgroundColor=none;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="211" width="705" x="592" y="80" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Cloudflare Pages" plantUmlId="c_6" plantUmlBaseStyle="shape=cube;size=10;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=12;fontSize=14;fontStyle=1;whiteSpace=wrap;" plantUmlBaseValue="Cloudflare Pages" id="zf8hB2FzxMNuZCbgKiw7-8">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-7" style="shape=cube;size=10;fillColor=none;verticalAlign=top;align=center;spacingTop=12;fontSize=14;fontStyle=1;whiteSpace=wrap;labelBackgroundColor=none;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="102" width="224" x="65.5" y="35" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Frontend React&#xa;HTML, CSS e JavaScript" plantUmlId="n_7" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;" plantUmlBaseValue="Frontend React&#xa;HTML, CSS e JavaScript" id="zf8hB2FzxMNuZCbgKiw7-9">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-8" style="rounded=1;absoluteArcSize=1;arcSize=5;fontSize=14;whiteSpace=wrap;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="46" width="184" x="15" y="40" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" plantUmlId="ci_8" plantUmlBaseStyle="shape=note;size=6;fillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;" plantUmlBaseValue="" id="zf8hB2FzxMNuZCbgKiw7-10">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-8" style="shape=note;size=6;strokeWidth=0.5;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="14" width="12" x="182" y="45" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Cloudflare Workers" plantUmlId="c_9" plantUmlBaseStyle="shape=cube;size=10;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=12;fontSize=14;fontStyle=1;whiteSpace=wrap;" plantUmlBaseValue="Cloudflare Workers" id="zf8hB2FzxMNuZCbgKiw7-11">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-7" style="shape=cube;size=10;fillColor=none;verticalAlign=top;align=center;spacingTop=12;fontSize=14;fontStyle=1;whiteSpace=wrap;labelBackgroundColor=none;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="158" width="315" x="370" y="35" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Python Worker" plantUmlId="c_10" plantUmlBaseStyle="shape=cube;size=10;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=12;fontSize=14;fontStyle=1;whiteSpace=wrap;" plantUmlBaseValue="Python Worker" id="zf8hB2FzxMNuZCbgKiw7-12">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-11" style="shape=cube;size=10;fillColor=none;verticalAlign=top;align=center;spacingTop=12;fontSize=14;fontStyle=1;whiteSpace=wrap;labelBackgroundColor=none;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="102" width="275" x="15" y="40" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="API Flask&#xa;executada com adaptador WSGI" plantUmlId="n_11" plantUmlBaseStyle="rounded=1;absoluteArcSize=1;arcSize=5;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;" plantUmlBaseValue="API Flask&#xa;executada com adaptador WSGI" id="zf8hB2FzxMNuZCbgKiw7-13">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-12" style="rounded=1;absoluteArcSize=1;arcSize=5;fontSize=14;whiteSpace=wrap;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="46" width="235" x="15" y="40" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" plantUmlId="ci_12" plantUmlBaseStyle="shape=note;size=6;fillColor=#F1F1F1;strokeColor=#181818;strokeWidth=0.5;" plantUmlBaseValue="" id="zf8hB2FzxMNuZCbgKiw7-14">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-12" style="shape=note;size=6;strokeWidth=0.5;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="14" width="12" x="233" y="45" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" plantUmlId="noteptr_20" plantUmlBaseStyle="shape=triangle;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;direction=east;" plantUmlBaseValue="" id="zf8hB2FzxMNuZCbgKiw7-22">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-7" style="shape=triangle;strokeWidth=0.5;direction=east;rotation=-75;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="8" width="50" x="252.37" y="10" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Supabase" plantUmlId="c_13" plantUmlBaseStyle="shape=mxgraph.basic.cloud_rect;html=1;fillColor=none;strokeColor=#181818;verticalAlign=top;align=center;spacingTop=8;fontSize=14;fontStyle=1;whiteSpace=wrap;" plantUmlBaseValue="Supabase" id="zf8hB2FzxMNuZCbgKiw7-15">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-1" style="shape=mxgraph.basic.cloud_rect;html=1;fillColor=none;verticalAlign=top;align=center;spacingTop=8;fontSize=14;fontStyle=1;whiteSpace=wrap;labelBackgroundColor=none;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="99" width="162" x="123.5" y="413" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="PostgreSQL&#xa;Banco de dados" plantUmlId="n_14" plantUmlBaseStyle="shape=cylinder3;size=10;boundedLbl=1;backgroundOutline=1;fillColor=#F1F1F1;strokeColor=#181818;fontSize=14;whiteSpace=wrap;" plantUmlBaseValue="PostgreSQL&#xa;Banco de dados" id="zf8hB2FzxMNuZCbgKiw7-16">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-15" style="shape=cylinder3;size=10;boundedLbl=1;backgroundOutline=1;fontSize=14;whiteSpace=wrap;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="46" width="122" x="20" y="35" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="HTTPS&#xa;baixa os arquivos React" plantUmlId="e_15" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=12;html=1;labelBackgroundColor=#FFFFFF;endArrow=classicThin;endFill=1;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="HTTPS&#xa;baixa os arquivos React" id="zf8hB2FzxMNuZCbgKiw7-17">
+          <mxCell edge="1" parent="zf8hB2FzxMNuZCbgKiw7-1" source="zf8hB2FzxMNuZCbgKiw7-3" style="fontColor=default;fontSize=12;html=1;labelBackgroundColor=none;endArrow=classicThin;endFill=1;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;strokeColor=#182E3E;" target="zf8hB2FzxMNuZCbgKiw7-8">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="140" y="80" />
+                <mxPoint x="430" y="70" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="HTTPS / REST&#xa;solicitações e respostas JSON" plantUmlId="e_16" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=12;html=1;labelBackgroundColor=#FFFFFF;endArrow=classicThin;endFill=1;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="HTTPS / REST&#xa;solicitações e respostas JSON" id="zf8hB2FzxMNuZCbgKiw7-18">
+          <mxCell edge="1" parent="zf8hB2FzxMNuZCbgKiw7-1" source="zf8hB2FzxMNuZCbgKiw7-3" style="fontColor=default;fontSize=12;html=1;labelBackgroundColor=none;endArrow=classicThin;endFill=1;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;strokeColor=#182E3E;" target="zf8hB2FzxMNuZCbgKiw7-12">
+            <mxGeometry relative="1" x="-0.3587" y="4" as="geometry">
+              <mxPoint as="offset" />
+              <Array as="points">
+                <mxPoint x="150" y="330" />
+                <mxPoint x="420" y="340" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="HTTPS / REST&#xa;quando o app for criado" plantUmlId="e_17" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=12;html=1;labelBackgroundColor=#FFFFFF;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="HTTPS / REST&#xa;quando o app for criado" id="zf8hB2FzxMNuZCbgKiw7-19">
+          <mxCell edge="1" parent="zf8hB2FzxMNuZCbgKiw7-1" source="zf8hB2FzxMNuZCbgKiw7-5" style="fontColor=default;fontSize=12;html=1;labelBackgroundColor=none;endArrow=classicThin;endFill=1;dashed=1;dashPattern=7 7;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;strokeColor=#182E3E;" target="zf8hB2FzxMNuZCbgKiw7-12">
+            <mxGeometry relative="1" x="-0.5548" as="geometry">
+              <mxPoint as="offset" />
+              <Array as="points">
+                <mxPoint x="490" y="260" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="conexão PostgreSQL segura&#xa;consulta e gravação de dados" plantUmlId="e_18" plantUmlBaseStyle="strokeColor=#181818;fontColor=#000000;fontSize=12;html=1;labelBackgroundColor=#FFFFFF;endArrow=classicThin;endFill=1;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;" plantUmlBaseValue="conexão PostgreSQL segura&#xa;consulta e gravação de dados" id="zf8hB2FzxMNuZCbgKiw7-20">
+          <mxCell edge="1" parent="zf8hB2FzxMNuZCbgKiw7-1" source="zf8hB2FzxMNuZCbgKiw7-12" style="fontColor=default;fontSize=12;html=1;labelBackgroundColor=none;endArrow=classicThin;endFill=1;curved=0;rounded=0;endSize=6;sourcePerimeterSpacing=0;targetPerimeterSpacing=0;strokeColor=#182E3E;" target="zf8hB2FzxMNuZCbgKiw7-16">
+            <mxGeometry relative="1" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="O Python Worker executa as rotas Flask&#xa;para processar as solicitações da API." plantUmlId="note_21" plantUmlBaseStyle="shape=note;size=10;fillColor=#FEFFDD;strokeColor=#181818;fontSize=13;whiteSpace=wrap;align=left;spacingLeft=4;" plantUmlBaseValue="O Python Worker executa as rotas Flask&#xa;para processar as solicitações da API." id="zf8hB2FzxMNuZCbgKiw7-23">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-1" style="shape=note;size=10;fontSize=13;whiteSpace=wrap;align=left;spacingLeft=4;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="41" width="267" x="1262" y="204" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" plantUmlId="noteptr_22" plantUmlBaseStyle="shape=triangle;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;direction=west;" plantUmlBaseValue="" id="zf8hB2FzxMNuZCbgKiw7-24">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-1" style="shape=triangle;strokeWidth=0.5;direction=west;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="8" width="36" x="1227" y="220" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Os dados ficam guardados no Supabase,&#xa;separados por assistência pelo assistenciaId." plantUmlId="note_23" plantUmlBaseStyle="shape=note;size=10;fillColor=#FEFFDD;strokeColor=#181818;fontSize=13;whiteSpace=wrap;align=left;spacingLeft=4;" plantUmlBaseValue="Os dados ficam guardados no Supabase,&#xa;separados por assistência pelo assistenciaId." id="zf8hB2FzxMNuZCbgKiw7-25">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-1" style="shape=note;size=10;fontSize=13;whiteSpace=wrap;align=left;spacingLeft=4;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="41" width="304" x="301" y="451" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" plantUmlId="noteptr_24" plantUmlBaseStyle="shape=triangle;fillColor=#FEFFDD;strokeColor=#181818;strokeWidth=0.5;direction=west;" plantUmlBaseValue="" id="zf8hB2FzxMNuZCbgKiw7-26">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-1" style="shape=triangle;strokeWidth=0.5;direction=west;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="8" width="36.5" x="265.5" y="467" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Sistema de Controle para Assistências Técnicas&#xa;Diagrama de Implantação" plantUmlId="title_25" plantUmlBaseStyle="text;html=1;fillColor=none;strokeColor=none;fontSize=14;fontStyle=1;fontColor=#000000;align=center;verticalAlign=middle;" plantUmlBaseValue="Sistema de Controle para Assistências Técnicas&#xa;Diagrama de Implantação" id="zf8hB2FzxMNuZCbgKiw7-27">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-1" style="text;html=1;fillColor=none;strokeColor=none;fontSize=14;fontStyle=1;align=center;verticalAlign=middle;labelBackgroundColor=none;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="44" width="352" x="488" y="30" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="O React é baixado pelo navegador&#xa;e executa no dispositivo do usuário." plantUmlId="note_19" plantUmlBaseStyle="shape=note;size=10;fillColor=#FEFFDD;strokeColor=#181818;fontSize=13;whiteSpace=wrap;align=left;spacingLeft=4;" plantUmlBaseValue="O React é baixado pelo navegador&#xa;e executa no dispositivo do usuário." id="zf8hB2FzxMNuZCbgKiw7-21">
+          <mxCell parent="zf8hB2FzxMNuZCbgKiw7-1" style="shape=note;size=10;fontSize=13;whiteSpace=wrap;align=left;spacingLeft=4;labelBackgroundColor=none;fillColor=#F5AB50;strokeColor=#909090;fontColor=#1A1A1A;" vertex="1">
+            <mxGeometry height="41" width="242" x="850" y="33" as="geometry" />
+          </mxCell>
+        </UserObject>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
