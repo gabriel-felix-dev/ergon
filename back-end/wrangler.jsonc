@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ergon-api",
+  "main": "worker.py",
+  "compatibility_date": "2026-10-12",
+  "compatibility_flags": ["python_workers"],
+  "secrets": {
+    "required": ["DATABASE_URL", "MAIL_PASSWORD"]
+  }
+}

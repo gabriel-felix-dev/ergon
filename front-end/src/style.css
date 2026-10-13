@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+:root{font-family:'DM Sans',sans-serif;color:#20302d;background:#f4f6f2;font-synthesis:none}
+*{box-sizing:border-box}
+body{margin:0}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer;border:0;background:#1e6a56;color:white;padding:12px 18px;border-radius:10px;font-weight:700;transition:.15s}
+button:hover{filter:brightness(.94);transform:translateY(-1px)}
+button.secondary{background:#e5eee8;color:#23634f}
+button.nav{background:none;color:#314840;padding:9px 12px}
+button.nav:hover{background:#e5eee8}
+button.textbutton{background:none;color:#236a57;padding:3px 5px;font-weight:600}
+button.textbutton.danger{color:#a94942}
+button.danger-button{background:#fff0ee;color:#a23c34}
+.shell{max-width:1200px;margin:auto;padding:0 28px 80px}
+.shell.narrow{max-width:760px;padding-top:24px}
+.topbar{height:88px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.topbar nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.brand{font-family:Outfit,sans-serif;font-size:26px;font-weight:800;letter-spacing:-1.3px;display:flex;align-items:center;gap:11px;color:#193c32}
+.mark{width:37px;height:37px;border-radius:11px;display:grid;place-items:center;background:#1d6d56;color:white;font-size:22px;letter-spacing:0}
+h1,h2,h3{font-family:Outfit,sans-serif;color:#19352d;line-height:1.1}
+h1{font-size:clamp(36px,5vw,62px);letter-spacing:-2px;margin:10px 0 18px}
+h2{font-size:23px;letter-spacing:-.5px;margin:0 0 20px}
+h3{font-size:17px;margin:22px 0 12px}
+p{line-height:1.55}
+.eyebrow{color:#3e8a68;font-size:12px;font-weight:800;letter-spacing:2px}
+.muted{color:#74827b;font-size:14px}
+.landing{display:grid;grid-template-columns:1fr 510px;gap:58px;align-items:start;padding-top:68px}
+.hero{padding-top:65px}
+.hero p{color:#61746b;font-size:19px;max-width:480px}
+.steps{display:flex;gap:17px;flex-wrap:wrap;margin-top:52px;color:#517665;font-weight:700;font-size:13px}
+.steps span{border-left:3px solid #9fd3aa;padding-left:11px}
+.card{background:#fff;border:1px solid #e6ece6;border-radius:18px;padding:26px;box-shadow:0 12px 30px rgba(29,70,48,.04)}
+.card.request{padding:34px}
+.auth{max-width:500px;margin:65px auto}
+.auth.wide{max-width:760px}
+form{display:flex;flex-direction:column;gap:17px}
+label{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:700;color:#466056}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.fields label:has(textarea){grid-column:1/-1}
+input:not([type=checkbox]),select,textarea{width:100%;border:1px solid #d9e2d9;background:#fbfcfa;border-radius:9px;padding:11px 12px;color:#273a32;outline:none;min-height:44px}
+input:focus,select:focus,textarea:focus{border-color:#55a37e;box-shadow:0 0 0 3px #dff0e5}
+textarea{min-height:92px;resize:vertical}
+.check{flex-direction:row;align-items:center;font-size:14px}
+.check input{accent-color:#1e6a56}
+.alert{padding:13px 17px;border-radius:10px;background:#e1f3e8;color:#245d3d;margin:8px 0 15px}
+.alert.error{background:#fff0ec;color:#943c36}
+.workspace{padding-top:33px}
+.workspace-head{display:flex;justify-content:space-between;align-items:end;gap:20px}
+.workspace-head h1{font-size:43px;margin:8px 0}
+.workspace-head p{color:#738279;margin:0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:17px;margin:30px 0}
+.stats div{background:#e7f1e9;border:1px solid #d7e9da;border-radius:14px;padding:20px 24px;display:flex;flex-direction:column;gap:4px}
+.stats strong{font-family:Outfit;font-size:32px;color:#1c654e}
+.stats span{font-size:13px;color:#59806c;font-weight:700}
+.tabs{display:flex;gap:7px;border-bottom:1px solid #d9e4da;overflow-x:auto;margin-bottom:22px}
+.tabs button{white-space:nowrap;border-radius:9px 9px 0 0;background:transparent;color:#6b8073;padding:14px 17px}
+.tabs button.active{color:#1e6a56;background:#e5eee8}
+.grid.two{display:grid;grid-template-columns:1fr 1.4fr;gap:20px;align-items:start}
+.grid .full{grid-column:1/-1}
+.list{display:flex;flex-direction:column}
+.row{display:flex;justify-content:space-between;align-items:start;gap:10px;padding:15px 0;border-top:1px solid #edf1eb}
+.row strong,.budget strong{display:block;color:#223c30}
+.row small,.budget small{display:block;color:#819188;margin-top:4px}
+.row-actions{display:flex;flex-wrap:wrap;justify-content:end;gap:5px}
+.budget{padding:21px 0;border-top:1px solid #edf1eb}
+.budget:first-child,.row:first-child{border-top:0;padding-top:0}
+.budget-head{display:flex;align-items:start;justify-content:space-between;gap:10px}
+.budget p{font-size:14px;color:#586c60}
+.pill{display:inline-block;background:#e9f3eb;color:#307555;border-radius:100px;padding:6px 10px;font-size:11px;font-weight:800;white-space:nowrap}
+.actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:16px}
+.actions select{width:auto;flex:1;min-width:170px}
+.order-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.order-grid .card{height:fit-content}
+.inline-form{display:flex;flex-direction:row;align-items:end;flex-wrap:wrap;margin-top:19px}
+.inline-form label{flex:1;min-width:150px}
+.detail p{display:flex;justify-content:space-between;border-bottom:1px solid #edf1eb;padding:10px 0;margin:0;gap:20px}
+.detail strong{color:#66796c}.detail span{text-align:right}
+hr{border:0;border-top:1px solid #e5ebe5;margin:25px 0}
+@media(max-width:850px){.landing,.grid.two{grid-template-columns:1fr}.landing{gap:25px;padding-top:15px}.hero{padding-top:20px}.hero h1{max-width:540px}.steps{margin-top:24px}.order-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.shell{padding:0 16px 60px}.topbar{height:auto;padding:18px 0;align-items:start;flex-direction:column}.topbar nav{gap:0}.fields{grid-template-columns:1fr}.card{padding:20px}.stats{gap:7px}.stats div{padding:14px}.stats strong{font-size:25px}.stats span{font-size:11px}.workspace-head{align-items:start}.workspace-head h1{font-size:35px}.row{flex-direction:column}.row-actions{justify-content:start}.detail p{font-size:13px}}
