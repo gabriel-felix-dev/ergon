@@ -619,7 +619,12 @@ def online_request(assistance_id):
     data = body()
     def confirmation(address, budget_id):
         send_email("Solicitação de orçamento registrada no Ergon", address,
-                   f"Sua solicitação de orçamento #{budget_id} foi registrada. "
+                   f"Sua solicitação de orçamento #{budget_id} foi registrada.\n"
+                   f"Cliente: {text(data, 'nome')}\n"
+                   f"Telefone: {text(data, 'telefone', 30)}\n"
+                   f"Email: {address}\n"
+                   f"Aparelho: {text(data, 'marca', 100)} {text(data, 'modelo', 100)}\n"
+                   f"Defeito informado: {text(data, 'defeito', 5000)}\n\n"
                    "Para acessar o sistema, abra Clique aqui, peça um código de "
                    "recuperação de senha e defina sua senha:\n" +
                    frontend_link("recuperar"))
@@ -724,7 +729,7 @@ def my_request():
     with transaction() as connection:
         if data.get("aparelhoId") is not None:
             device_id = integer(data, "aparelhoId")
-            device = one(connection, '''SELECT "Id" FROM public."Aparelho"
+            device = one(connection, '''SELECT "Id", "Marca", "Modelo" FROM public."Aparelho"
                 WHERE "Id" = %s AND "IdCliente" = %s
                   AND "IdAssistenciaTecnica" = %s AND "Ativo" = TRUE''',
                 (device_id, user["id"], user["assistenciaId"]))
@@ -733,7 +738,7 @@ def my_request():
         else:
             device = one(connection, '''INSERT INTO public."Aparelho"
                 ("IdAssistenciaTecnica", "IdCliente", "Marca", "Modelo")
-                VALUES (%s, %s, %s, %s) RETURNING "Id"''',
+                VALUES (%s, %s, %s, %s) RETURNING "Id", "Marca", "Modelo"''',
                 (user["assistenciaId"], user["id"],
                  text(data, "marca", 100), text(data, "modelo", 100)))
         item = one(connection, '''INSERT INTO public."Orcamento"
@@ -742,7 +747,10 @@ def my_request():
             VALUES (%s, %s, %s, 'Online', %s) RETURNING "Id", "Status"''',
             (user["assistenciaId"], user["id"], device["Id"], problem))
         send_email("Solicitação de orçamento registrada no Ergon", user["email"],
-                   f"Sua solicitação de orçamento #{item['Id']} foi registrada. "
+                   f"Sua solicitação de orçamento #{item['Id']} foi registrada.\n"
+                   f"Cliente: {user['nome']}\nEmail: {user['email']}\n"
+                   f"Aparelho: {device['Marca']} {device['Modelo']}\n"
+                   f"Defeito informado: {problem}\n\n"
                    "Acompanhe seus pedidos no sistema:\n" + frontend_link("entrar"))
     return jsonify(item), 201
 
