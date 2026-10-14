@@ -1,56 +1,60 @@
-# Prompt — Projeto Ergon (protótipo)
+# Instruções do projeto Ergon — demonstração acadêmica local
 
 ## Contexto
 
-Projeto de conclusão de curso da faculdade em **React + Flask + Postgress**. Os arquivos estão na pasta do projeto:
+Projeto de conclusão de curso da faculdade em **React + Flask + PostgreSQL**. O objetivo atual é uma demonstração acadêmica local. A implantação em Cloudflare é uma possibilidade futura, não um critério para concluir esta etapa. Os arquivos estão na pasta do projeto:
 
-- **Ideia do projeto**: existe a pasta `regra-requisitos-classes/` com o arquivo `regra-requisitos-e-diagrama-de-classes-ergon.md` descrevendo a ideia, os requisitos, as classes do sistema, stakeholders, usuários, histórias de usuário, requisitos não-funcionais e as regras de negócio.
-- **Tecnologias para serem usadas**: existe as pastas `regra-requisitos-back-end-flask/`, `regra-tecnologias/` e `regra-banco-de-dados/` descrevendo as tecnologias que devem ser implementadas no sistema e como devem ser implementadas.
-- **Conteúdo base do back-end**: em **PDF**, separado na pasta `regra-requisitos-back-end-flask/` são os slides do que é para ser **usado para o back-end**.
+- **Visão completa do projeto**: `.specs/regra-requisitos-classes/regra-requisitos-e-diagrama-de-classes-ergon.md` descreve requisitos, classes, stakeholders, histórias de usuário e regras de negócio.
+- **Tecnologias para serem usadas**: as pastas `.specs/regra-tecnologias/` e `.specs/regras-banco-de-dados/` descrevem as tecnologias e convenções aprovadas.
+- **Conteúdo didático do back-end**: os PDFs em `.specs/regras-back-end-flask/` mostram os conceitos desenvolvidos nas aulas.
+- **Escopo da demonstração**: `.specs/IDEIA.md` delimita a versão atual; o documento em `.specs/regra-requisitos-classes/` também preserva a visão futura do produto.
+- **Mudanças pendentes**: `.specs/ALTERAÇÕES NECESSARIAS.md` registra o que ainda precisa ser implementado ou decidido. `.specs/VERSION.md` registra o que foi entregue.
 
 ## Sobre os formatos (importante)
 
 - O conteúdo que está em **PDF** → a extração é mais trabalhosa e pode vir incompleta, mas dá pra fazer. Tome as decisões com base no que conseguir extrair e, se algo ficar ilegível, me avise em vez de adivinhar.
 
-## As duas travas inegociáveis
+## Regras para continuar o projeto
 
-1. **Não construa nada enquanto a ideia não estiver definida e confirmada por mim.** Seu papel agora é entender o material e me ajudar a fechar o escopo — não sair implementando.
+1. **Não amplie o escopo nem resolva uma regra de negócio ambígua por conta própria.** A primeira versão já foi definida em `.specs/IDEIA.md`; mudanças de produto, domínio ou arquitetura ainda pendentes devem ser apresentadas para decisão antes da implementação.
 
-2. **O projeto só pode usar o que está definido nos arquivos.** Os slides dos PDFs em `Flask/` é o **limite** do que pode ser usado (libs, padrões, técnicas). Antes de propor qualquer abordagem, valide contra os slides. Se algo necessário **não** foi ensinado, sinalize e proponha uma alternativa dentro do que foi ensinado.
+2. **Use os conceitos desenvolvidos nos slides e preserve um código simples de estudar e explicar.** Os exemplos de bibliotecas e o uso de MySQL nos PDFs não formam uma lista fechada. A stack aprovada é React, Flask e PostgreSQL; uma biblioteca equivalente necessária para essa stack pode ser usada quando sua função e sua relação com os conceitos das aulas forem explicadas claramente. Se uma técnica acrescentar complexidade sem necessidade para a demonstração, proponha uma alternativa mais simples.
 
-## Passo 0 — Ler e devolver entendimento (sem alterar nada)
+3. **Use os termos de comunicação corretamente.** React e Flask trocam requisições e respostas em JSON por HTTP; Flask consulta o PostgreSQL com SQL. Os métodos HTTP usados são `GET`, `POST`, `PUT` e `DELETE`. `READ` nomeia a leitura no CRUD, não um método HTTP.
 
-Leia, nesta ordem:
+4. **A demonstração inclui autenticação de funcionários com JWT e dois fluxos de email:** envio do link de orçamento e recuperação de senha. Senhas e tokens usados apenas para verificação devem ser armazenados como hash no banco. Antes de definir a proteção de outros dados sensíveis, identifique se o sistema precisa recuperar seu valor, como ocorre com o email do destinatário.
 
-1. Acessar `regra-tecnologias/` com as regras de quais tecnologias serão usadas.
-2. Acessar `regra-requisitos-back-end-flask/` com os **PDFs**.
-3. Acessar `regra-banco-de-dados/` com as regras de de estrutura do banco de dados.
-4. Acessar  `regra-requisitos-classes/` para entender o que o sistema deve fazer.
+## Leitura de contexto antes de uma tarefa
 
-Depois, me devolva um resumo e **espere minha resposta**:
+Leia os contratos relevantes à tarefa, nesta ordem quando precisar de uma visão geral:
 
-- (a) Regras/critérios da atividade como você entendeu.
-- (b) O que os slides permitem (resumo do que foi lecionado e que dá pra usar).
-- (c) O que você entendeu da ideia do projeto.
-- (d) Qual o primeiro passo.
+1. `.specs/IDEIA.md` e `.specs/ALTERAÇÕES NECESSARIAS.md` para o escopo atual e as pendências.
+2. `.specs/regra-tecnologias/` e, se a tarefa envolver banco, `.specs/regras-banco-de-dados/`.
+3. PDFs em `.specs/regras-back-end-flask/` relacionados à técnica em questão.
+4. `.specs/regra-requisitos-classes/` para regras detalhadas, distinguindo demonstração atual de visão futura.
 
-## Conforme eu for definindo a ideia
+Ao encontrar uma decisão ainda pendente, devolva um resumo e **espere minha resposta** antes da parte que depende dela:
+
+- (a) Qual decisão falta e por que ela muda a implementação.
+- (b) Quais conceitos dos slides e contratos existentes se aplicam.
+- (c) Quais opções simples atendem ao escopo confirmado.
+
+## Evolução do escopo
 
 - Vá refinando o escopo a cada coisa que eu mandar.
-- Mantenha um arquivo (ex.: `IDEIA.md`) de decisões atualizado dentro da pasta `.specs/` com: ideia atual, escopo fechado, o que ainda falta definir, e quais técnicas dos slides cada parte vai usar. Isso evita perder o fio.
-- Mantenha um arquivo (ex.: `VERSION.md`) com a versão atual do projeto e o que foi implementado de novo que não estava no arquivo `regra-requisitos-e-diagrama-de-classes-ergon.md`.
-- A cada proposta de funcionalidade, diga explicitamente: **isso cabe no que foi lecionado? Sim/Não — e onde nos slides.**
+- Mantenha `.specs/IDEIA.md` como escopo e decisões atuais, `.specs/ALTERAÇÕES NECESSARIAS.md` como lista de mudanças pendentes e `.specs/VERSION.md` como histórico de implementação e validação, sem repetir manualmente o mesmo estado nos três arquivos.
+- A cada proposta de funcionalidade, diga qual conceito dos slides ela aplica e como sua implementação permanece simples de explicar.
 
 ## Escopo
 
-- Manter no **mínimo viável que atende as regras**. Não inflar com features, telas ou arquitetura além do pedido — nem além do que foi ensinado nos slides. Sempre mantenha o código simples e estável para futuras implementações e atualizações.
+- Manter no **mínimo viável para a demonstração local**. Não acrescentar estoque, fornecedores, receitas, despesas, relatórios ou implantação em produção como condição para concluir esta versão. Manter o código simples e estável para futuras implementações e atualizações.
 - Conforme cada parte do sistema for criada siga a seguinte organização:
 
   - `back-end/`: **(toda a estrutura do back-end do projeto)**
   - `data-base/`: **(toda estrutura a estrutura do banco de dados)**
   - `script/`: **(estrutura de criação do banco)**
   - `trg/`: **(pasta para guardar as triggers)**
-  - `fnc/`: **(pasta para guardar as triggers)**
+  - `fnc/`: **(pasta para guardar as functions)**
   - `sp/`: **(pasta para guardar as store procedures)**
   - `vw/`: **(pasta para guardar as views)**
   - `front-end/`: **(toda a estrutura do front-end do projeto)**
@@ -62,6 +66,9 @@ Depois, me devolva um resumo e **espere minha resposta**:
     ├── README.md
     ├── .specs/
     │   ├── prompt.md
+    │   ├── IDEIA.md
+    │   ├── VERSION.md
+    │   ├── ALTERAÇÕES NECESSARIAS.md
     │   ├── regra-requisitos-classes/
     │   │   └── regra-requisitos-e-diagrama-de-classes-ergon.md
     │   ├── regra-tecnologias/
@@ -89,9 +96,9 @@ Depois, me devolva um resumo e **espere minha resposta**:
     └── front-end/
 ```
 
-## Só depois de eu confirmar
+## Implementação e validação
 
-- Escopo fechado + tudo dentro do que foi lecionado → aí sim começa a implementar, em blocos pequenos, validando que compila e funciona a cada etapa.
+- Para escopo confirmado, implementar em blocos pequenos e validar o comportamento observado a cada etapa. A demonstração só estará pronta quando o fluxo de orçamento até OS e a recuperação de senha por email funcionarem localmente; compilar, por si só, não comprova o fluxo.
 
 ## Sempre
 

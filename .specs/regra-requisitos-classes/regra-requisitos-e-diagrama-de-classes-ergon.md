@@ -6,6 +6,19 @@ O sistema será usado por várias assistências técnicas independentes para ger
 
 Cada assistência terá seus próprios dados. Os relacionamentos entre registros devem manter os dados associados à assistência correspondente.
 
+## Recorte da demonstração acadêmica local
+
+Este documento preserva a **visão completa** do produto. Para a demonstração local da primeira versão, o escopo confirmado em `.specs/IDEIA.md` é:
+
+- Cadastro e acesso de assistência e funcionários; cadastro de clientes e aparelhos.
+- Solicitação, resposta, aprovação ou recusa de orçamentos; link enviado por email; criação da OS somente após aprovação; reparo, entrega e pagamento.
+- Autenticação dos funcionários com **JWT** e recuperação de senha por email, confirmadas em 14/10/2026 e ainda pendentes de implementação.
+- Isolamento dos dados entre assistências e preservação do histórico por desativação lógica.
+
+Estoque, fornecedores, solicitação e movimentação de peças, receitas, despesas, tipos financeiros e relatórios permanecem na visão futura. As histórias `US06` a `US09` e `US11`, as regras correspondentes e as classes desses módulos **não são critérios de conclusão** da demonstração. As metas de desempenho, disponibilidade e backup `RNF07` a `RNF09` são propostas para uma etapa de implantação posterior, não resultados já comprovados.
+
+O banco da demonstração permanece **PostgreSQL**. A interface troca JSON com a API Flask; Flask usa SQL para acessar o banco. Os conceitos dos slides orientam a implementação, que deve ser simples de explicar.
+
 ## Regras de assistência e usuários
 
 - Cada assistência tem um ou mais funcionários.
@@ -405,17 +418,37 @@ classDiagram
 - **Dado** que sou funcionário sem perfil de gerente, **quando** solicito um relatório avançado, **então** o sistema nega o acesso.
 - **Dado** que sou gerente, **quando** solicito um relatório simples ou avançado, **então** o sistema permite a emissão com dados apenas da minha assistência.
 
+### US12 — Entrar como funcionário com JWT (demonstração local)
+
+**Como** funcionário, **quero** entrar com minhas credenciais e receber uma sessão JWT, **para** acessar somente os dados e ações permitidos na minha assistência.
+
+- **Dado** um funcionário ativo com senha correta em uma assistência ativa, **quando** ele entra, **então** a API emite um JWT com prazo de validade definido.
+- **Dado** um JWT ausente, alterado ou expirado, **quando** uma rota protegida é acessada, **então** a API nega o acesso.
+- **Dado** um funcionário ou assistência desativado, **quando** o token é usado, **então** o acesso é negado mesmo que o prazo do JWT ainda não tenha terminado.
+- O comportamento do logout e da invalidação de tokens existentes após a troca de senha ainda precisa ser definido antes da implementação.
+
+### US13 — Recuperar senha por email (demonstração local)
+
+**Como** funcionário, **quero** solicitar por email um link de recuperação, **para** definir uma nova senha quando perder o acesso.
+
+- **Dado** um funcionário com email cadastrado, **quando** ele solicita recuperação, **então** o sistema envia um link individual ao endereço cadastrado sem revelar a senha anterior.
+- **Dado** um link válido, **quando** o funcionário define uma nova senha, **então** a senha anterior deixa de funcionar e o link não pode ser reutilizado.
+- **Dado** um link inválido ou vencido, **quando** ele tenta redefinir a senha, **então** a alteração é recusada.
+- O prazo do link, a forma de identificar a assistência e a proteção contra descoberta de contas precisam ser fechados antes da implementação.
+
 ## 5. Requisitos Não-Funcionais
 
 **Orientação:** (Descreva as qualidades ou restrições do sistema — como desempenho, segurança, usabilidade, compatibilidade, disponibilidade, entre outros - quando possível, mensuráveis/verificáveis. Evite termos subjetivos como “rápido”, “fácil”, “bonito” ou “seguro” sem definir como essa característica poderá ser verificada. Cada requisito deve ter um identificador, exemplo, RNF01.)
 
 > As metas numéricas abaixo são propostas iniciais para tornar os requisitos verificáveis; devem ser confirmadas com os responsáveis pelo projeto antes da implantação.
 
+Para a **demonstração local**, `RNF07` a `RNF09` não compõem o critério de conclusão: não há medição de carga, disponibilidade mensal ou rotina operacional de backup que permita afirmar seu atendimento. `RNF11` ainda exige decisão sobre usar um fuso único ou um fuso configurável por assistência.
+
 - **RNF01 — Isolamento entre assistências:** Toda consulta ou alteração de clientes, funcionários, OS, receitas, despesas, fornecedores, peças e tipos deve restringir os resultados à assistência autenticada. A verificação deve comprovar que um usuário não consegue consultar nem alterar registros de outra assistência, inclusive manipulando identificadores enviados à aplicação.
 - **RNF02 — Controle de acesso por perfil:** O sistema deve validar permissões no servidor em cada operação. Funcionários podem consultar estoque, emitir relatórios simples, solicitar peças e registrar movimentações para OS. Somente gerentes podem emitir relatórios avançados, responder solicitações como gerente e cadastrar fornecedores, peças, receitas e despesas. Tentativas não autorizadas devem ser negadas e não podem alterar dados.
 - **RNF03 — Integridade referencial:** O sistema deve persistir relações válidas entre assistência, cliente, aparelho, orçamento, OS, funcionário, pagamento, peças, fornecedores e lançamentos. A tentativa de salvar uma referência inexistente ou incompatível com a assistência deve ser recusada sem persistência parcial.
 - **RNF04 — Consistência transacional:** A aprovação de um orçamento e a criação da OS correspondente devem ocorrer como uma única operação lógica. Se qualquer etapa falhar, não deve permanecer uma aprovação sem OS nem uma OS sem orçamento aprovado. O mesmo princípio vale para registrar pagamento e alterar o status da OS.
-- **RNF05 — Proteção de credenciais e tráfego:** Credenciais de acesso não devem ser armazenadas em texto puro; devem ser protegidas por algoritmo de hash apropriado. Em produção, todo tráfego entre cliente e sistema deve usar HTTPS/TLS.
+- **RNF05 — Proteção de credenciais e tráfego:** Senhas e tokens usados somente para verificação não devem ser armazenados em texto puro; devem ser protegidos por hash apropriado. Outros campos sensíveis precisam ser classificados conforme a necessidade de recuperar seu valor, antes de escolher a proteção. Em produção, todo tráfego entre cliente e sistema deve usar HTTPS/TLS.
 - **RNF06 — Rastreabilidade:** O sistema deve registrar, no mínimo, funcionário responsável pela resposta ao orçamento, responsável pelo reparo, e dados de cada movimentação de estoque (peça, OS, funcionário, data, quantidade e tipo), conforme o modelo. Registros devem permitir identificar a assistência e o momento da operação.
 - **RNF07 — Desempenho (meta proposta):** Em condições normais de operação e até 50 usuários simultâneos, pelo menos 95% das consultas de listagem e gravações usuais devem responder em até 2 segundos, excluídas a geração de relatórios avançados e as operações dependentes de serviços externos. O tempo deve ser medido no ambiente de homologação com massa de dados representativa.
 - **RNF08 — Disponibilidade (meta proposta):** O sistema deve alcançar disponibilidade mensal de pelo menos 99,5%, desconsiderando janelas de manutenção previamente comunicadas. A disponibilidade deve ser apurada por monitoramento automático do serviço.

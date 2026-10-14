@@ -4,7 +4,7 @@
 
 Sistema de gestão para assistências técnicas independentes. Cada assistência tem seus próprios funcionários, clientes, aparelhos, orçamentos, ordens de serviço e pagamentos. O primeiro gerente cria a assistência e administra somente ela. Não há administrador global.
 
-A primeira versão inclui CRUD de assistência técnica, funcionário e cliente, consulta de OS por cliente e todo o processo de orçamento e OS. Estoque, fornecedores, receitas, despesas e relatórios ficam fora desta versão.
+A primeira versão, destinada a uma **demonstração acadêmica local**, inclui CRUD de assistência técnica, funcionário e cliente, consulta de OS por cliente e todo o processo de orçamento e OS. Também deve incluir autenticação de funcionários com JWT e recuperação de senha por email, confirmadas em 14/10/2026 e ainda pendentes de implementação. Estoque, fornecedores, receitas, despesas, relatórios e implantação em Cloudflare ficam fora desta versão.
 
 ## Tecnologias e aulas
 
@@ -30,13 +30,13 @@ A OS registra responsável, recebimento do aparelho quando necessário, início 
 
 ## Decisões técnicas desta versão
 
-- Login com senha somente para funcionários; clientes usam o link individual.
+- Login com senha somente para funcionários; clientes usam o link individual. A demonstração deve usar JWT para a sessão dos funcionários; a implementação atual com token opaco precisa ser adequada.
 - Separação de dados por `IdAssistenciaTecnica` em consultas e operações.
-- Tokens de sessão e de orçamento são guardados apenas como hash; senhas de funcionário são derivadas por PBKDF2.
+- A implementação atual guarda apenas hashes dos tokens de sessão e de orçamento; as senhas de funcionário são derivadas por PBKDF2. A migração para JWT deve preservar a verificação de funcionários e assistências ativos. Links de recuperação de senha também precisarão de proteção por hash e uso único.
 - Desativação lógica de cadastros para preservar histórico referenciado.
 - Documento do cliente e tipo de aparelho opcionais para manter os seis campos do formulário público.
 - Credenciais de banco e SMTP e URL pública do frontend vêm do ambiente.
 
 ## Verificação pendente
 
-O código compila, mas banco PostgreSQL, envio SMTP e implantação em Cloudflare precisam de integração com serviços configurados. O vencimento sem agendador só altera o estado na próxima consulta ou tentativa de decisão.
+O código compila e houve testes parciais com PostgreSQL e SMTP local, descritos em `RESUMO_DO_PROJETO.md`. O fluxo completo de email e a recuperação de senha ainda não foram validados; JWT ainda não foi implementado. A implantação em Cloudflare não é requisito para a demonstração local. O vencimento sem agendador só altera o estado na próxima consulta ou tentativa de decisão.

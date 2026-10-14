@@ -23,6 +23,8 @@ data-base/
 
 ## Arquivos SQL (PostgreSQL)
 
+Os padrões abaixo se aplicam **quando** uma function, trigger, stored procedure ou view for necessária para uma regra concreta. A existência das pastas e dos modelos não obriga a criar objetos desses tipos na demonstração. O fluxo atual pode usar tabelas e SQL chamado pelo Flask, respeitando as regras de transação e integridade.
+
 Salvar cada arquivo na pasta correspondente ao tipo do objeto. O nome deve começar pela sigla do tipo em maiúsculas, seguida de `_` e do nome da finalidade em PascalCase. Usar a extensão `.sql`.
 
 | Tipo | Pasta | Padrão | Exemplo |

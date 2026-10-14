@@ -1,5 +1,10 @@
 # Tecnologias
 
+## Objetivo atual
+
+- A primeira entrega é uma demonstração acadêmica local. Cloudflare Pages e Workers permanecem como possibilidades futuras; não são necessários para validar esta entrega.
+- Os slides fornecem os conceitos didáticos. Bibliotecas equivalentes necessárias para React, Flask e PostgreSQL podem ser utilizadas quando a escolha for simples de explicar.
+
 ## Interface e front-end
 
 - **React** — biblioteca usada para construir a interface.
@@ -12,22 +17,30 @@
 - **Python** — linguagem do serviço de back-end.
 - **Flask** — framework usado para implementar as rotas da API.
 - **WSGI** — interface/adaptador indicada para executar a aplicação Flask no Python Worker.
-- **Cloudflare Workers** — plataforma indicada para executar o Python Worker.
+- **Cloudflare Workers** — possibilidade futura para executar o Python Worker.
 
 ## Hospedagem
 
-- **Cloudflare Pages** — hospedagem indicada para os arquivos do front-end React.
+- **Cloudflare Pages** — possibilidade futura para hospedar os arquivos do front-end React.
 
 ## Comunicação e dados
 
 - **HTTPS** — protocolo seguro usado nas conexões.
 - **REST** — estilo de comunicação da API.
-- **JSON** — formato indicado para solicitações e respostas.
+- **JSON** — formato das solicitações e respostas entre React e a API Flask; não é o formato usado pela API para consultar o banco.
+- **Métodos HTTP** — `GET` para leitura, `POST` para criação ou ações, `PUT` para atualização e `DELETE` para desativação. `READ` é uma operação do CRUD, não um método HTTP.
 
 ## Banco de dados
 
 - **Supabase** — serviço onde os dados ficam armazenados.
-- **PostgreSQL** — sistema de gerenciamento de banco de dados usado pelo Supabase no diagrama.
+- **PostgreSQL** — banco escolhido para o Ergon, mantido no lugar do MySQL exemplificado nos slides.
+- **SQL** — linguagem usada pelo backend para consultar e modificar o PostgreSQL.
+
+## Autenticação e email da demonstração
+
+- Funcionários entram com senha e sessão representada por JWT. A implementação atual ainda usa token opaco e precisa ser adequada.
+- Senhas e tokens usados apenas para verificação são armazenados como hash. Outros dados sensíveis devem ser classificados antes de escolher sua proteção, pois alguns precisam ser recuperados para consulta ou envio de email.
+- O backend usa Flask-Mail para enviar tanto o link de orçamento quanto o link de recuperação de senha. A recuperação ainda precisa ser implementada.
 
 ## Arquitetura do sistema
 
