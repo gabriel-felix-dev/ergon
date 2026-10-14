@@ -1,6 +1,6 @@
 # Ergon
 
-Demonstração acadêmica local de assistência técnica. O cliente inicia o orçamento online; a equipe responde; o cliente aprova ou recusa por email; a aprovação cria a OS, que segue até pagamento manual ou cancelamento.
+Demonstração acadêmica local de assistência técnica. O cliente inicia o orçamento online; a equipe registra a proposta; o cliente abre o link recebido por email e aprova ou recusa na página do Ergon. A aprovação cria a OS, que segue até pagamento manual ou cancelamento.
 
 ## Estrutura
 
@@ -51,7 +51,7 @@ Se a conexão local apresentar `CERTIFICATE_VERIFY_FAILED`, baixe o certificado 
 
 O primeiro gerente cria a assistência e define a própria senha. Ele convida funcionários pelo email; cada funcionário completa o cadastro e define sua senha pelo link recebido. Funcionários gerenciam clientes, aparelhos, orçamentos, OS e pagamentos.
 
-O cliente solicita orçamento em um único formulário público com nome, telefone, email, marca, modelo e defeito. O sistema cria cliente, aparelho e orçamento e envia confirmação por email. O email orienta a pedir o código de recuperação para criar a senha e entrar na área do cliente. Um email já cadastrado na assistência exige login ou recuperação de senha; o cliente autenticado pode pedir outro orçamento. A equipe responde por email com link único; o cliente aprova ou recusa por esse link. O link e a área do cliente mostram o andamento da OS.
+O cliente solicita orçamento em um único formulário público com nome, telefone, email, marca, modelo e defeito. O sistema cria cliente, aparelho e orçamento e envia confirmação por email. A solicitação aparece no painel da equipe; não há email automático para a assistência nessa etapa. O email do cliente orienta a pedir o código de recuperação para criar a senha e entrar na área do cliente. Um email já cadastrado na assistência exige login ou recuperação de senha; o cliente autenticado pode pedir outro orçamento. A equipe registra a proposta no painel e o sistema envia ao cliente um email com link único. Na página aberta pelo link, o cliente aprova ou recusa durante as 48 horas seguintes ao registro da resposta da equipe. A decisão é gravada e aparece no painel da assistência após atualizar os dados; o sistema não envia email de decisão à equipe. O link e a área do cliente mostram o andamento da OS.
 
 A proposta vence após 48 horas. O vencimento é processado ao consultar orçamentos ou abrir o link. A OS é criada uma vez, somente na aprovação. A equipe registra recebimento do aparelho, reparo, entrega e pagamento. O pagamento não é processado pelo sistema: o funcionário registra valor, forma e data efetiva, com o dia atual sugerido.
 
