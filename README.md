@@ -12,14 +12,17 @@ Demonstração acadêmica local de assistência técnica. O cliente inicia o or�
 
 ## Executar localmente
 
-1. Crie um banco PostgreSQL vazio e execute `data-base/script/script-ergon.sql`. Se já tiver o esquema anterior, faça cópia do banco e execute `data-base/script/migrations/001-prototipo-local.sql` nessa cópia. Antes da migração, confira emails duplicados de clientes na mesma assistência, pois a nova unicidade impedirá duplicatas.
+1. Escolha **um** caminho para preparar o banco:
+   - **Banco vazio:** execute apenas `data-base/script/script-ergon.sql`. Esse arquivo já contém todas as colunas, tabelas e índices da versão atual; não execute a migração depois dele.
+   - **Banco criado pela versão anterior:** faça uma cópia e execute apenas `data-base/script/migrations/001-prototipo-local.sql` na cópia. Antes, confira emails duplicados de clientes na mesma assistência, pois a nova unicidade impedirá duplicatas.
 2. No terminal da API:
 
    ```powershell
    cd back-end
    python -m venv .venv
    .\.venv\Scripts\python.exe -m pip install -e .
-   $env:DATABASE_URL = "postgresql://usuario:senha@host:5432/postgres"
+   # Substitua pela URI real do seu PostgreSQL (local ou Supabase).
+   $env:DATABASE_URL = "postgresql://usuario:senha@localhost:5432/ergon"
    $env:JWT_SECRET = "coloque-aqui-um-segredo-aleatorio-com-mais-de-32-caracteres"
    $env:FRONTEND_ORIGIN = "http://localhost:5173"
    $env:PUBLIC_FRONTEND_URL = "http://localhost:5173"
@@ -37,11 +40,10 @@ Demonstração acadêmica local de assistência técnica. O cliente inicia o or�
    ```powershell
    cd front-end
    npm.cmd install
-   $env:VITE_API_URL = "http://localhost:5000"
    npm.cmd run dev
    ```
 
-O banco pode ser PostgreSQL local (`localhost`, sem TLS) ou Supabase (conexão TLS). Use uma conta SMTP capaz de enviar para os emails da demonstração. Guarde `DATABASE_URL`, `JWT_SECRET` e credenciais SMTP fora do Git. Sem essas configurações, a jornada com banco e email não funciona.
+O banco pode ser PostgreSQL local (`localhost`, sem TLS) ou Supabase (conexão TLS). A URI acima é apenas um exemplo: troque usuário, senha, servidor e nome do banco pelos valores reais. Sem um PostgreSQL ativo e com o esquema carregado, `/api/assistencias` retorna erro 503 com a causa da conexão. Em desenvolvimento, o Vite encaminha `/api` para `http://127.0.0.1:5000`; se `VITE_API_URL` estiver definido em outro terminal, remova essa variável e reinicie o Vite para usar o proxy. Use uma conta SMTP capaz de enviar para os emails da demonstração. Guarde `DATABASE_URL`, `JWT_SECRET` e credenciais SMTP fora do Git. Sem essas configurações, a jornada com banco e email não funciona.
 
 Para ensaiar o fluxo sem enviar mensagens externas, abra outro terminal em `back-end` e execute `.\.venv\Scripts\python.exe tests\smtp_capture.py`. Na API, use `MAIL_SERVER=127.0.0.1`, `MAIL_PORT=1025`, `MAIL_USE_TLS=false`, `MAIL_DEFAULT_SENDER=teste@ergon.local`, sem usuário e senha. As mensagens aparecem em `back-end/.test-mail/messages.jsonl`. Para a apresentação com recebimento no email do participante, configure a conta SMTP real antes de iniciar a API.
 

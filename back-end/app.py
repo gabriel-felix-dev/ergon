@@ -13,7 +13,10 @@ from flask.json.provider import DefaultJSONProvider
 from flask_mail import Mail, Message
 
 import auth
-from db import all_rows, execute, one, transaction
+from db import (
+    DatabaseConfigurationError, DatabaseUnavailableError, all_rows, execute,
+    one, transaction,
+)
 from services import (
     RuleError, create_online_request, decide_budget, list_budgets,
     list_orders, public_budget, register_payment, resend_link, respond_budget,
@@ -66,6 +69,13 @@ def rule_error(error):
 @app.errorhandler(pg8000.dbapi.IntegrityError)
 def integrity_error(_error):
     return jsonify({"erro": "Dados duplicados ou relacionamento inválido"}), 409
+
+
+@app.errorhandler(DatabaseConfigurationError)
+@app.errorhandler(DatabaseUnavailableError)
+def database_error(error):
+    app.logger.error("Falha no banco: %s", error)
+    return jsonify({"erro": str(error)}), 503
 
 
 def body():

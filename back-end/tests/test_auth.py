@@ -33,6 +33,11 @@ class AuthenticationTests(TestCase):
         self.assertTrue(auth.verify_password("SenhaErgon123!", first))
         self.assertFalse(auth.verify_password("SenhaErrada123!", first))
 
+    def test_password_accepts_eight_characters_and_rejects_seven(self):
+        self.assertTrue(auth.verify_password("abc12345", auth.password_hash("abc12345")))
+        with self.assertRaises(RuleError):
+            auth.password_hash("abc1234")
+
     def test_staff_token_requires_active_matching_session_version(self):
         account = {
             "Id": 7, "Nome": "Gerente", "Email": "gerente@teste.com",

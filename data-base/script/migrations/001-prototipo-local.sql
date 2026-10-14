@@ -1,4 +1,5 @@
 -- Executar uma vez em uma cópia local do banco criado pela versão anterior.
+-- NÃO executar após script-ergon.sql: o esquema inicial já inclui esta migração.
 -- Antes da execução, conferir emails duplicados por assistência; o índice único
 -- de Cliente falhará se houver duplicatas que precisam ser resolvidas.
 BEGIN;

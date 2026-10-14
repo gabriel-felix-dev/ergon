@@ -17,8 +17,8 @@ SESSION_HOURS = 12
 
 
 def password_hash(password):
-    if not isinstance(password, str) or not 10 <= len(password) <= 256:
-        raise RuleError("A senha deve ter entre 10 e 256 caracteres", 400)
+    if not isinstance(password, str) or not 8 <= len(password) <= 256:
+        raise RuleError("A senha deve ter entre 8 e 256 caracteres", 400)
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, ITERATIONS)
     return f"pbkdf2_sha256${ITERATIONS}${salt.hex()}${digest.hex()}"

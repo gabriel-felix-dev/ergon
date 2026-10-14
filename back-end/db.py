@@ -9,6 +9,14 @@ import pg8000.dbapi
 from flask import has_request_context, request
 
 
+class DatabaseConfigurationError(Exception):
+    pass
+
+
+class DatabaseUnavailableError(Exception):
+    pass
+
+
 def _database_url():
     if has_request_context():
         worker_env = request.environ.get("workers.env")
@@ -18,7 +26,7 @@ def _database_url():
                 return str(value)
     value = os.environ.get("DATABASE_URL")
     if not value:
-        raise RuntimeError("DATABASE_URL não foi configurada")
+        raise DatabaseConfigurationError("Configure DATABASE_URL com a URI real do PostgreSQL")
     return value
 
 
@@ -37,17 +45,26 @@ def _ssl_context(host):
 def _connect():
     parts = urlparse(_database_url())
     if parts.scheme not in ("postgres", "postgresql") or not parts.hostname:
-        raise RuntimeError("DATABASE_URL deve ser uma URL PostgreSQL válida")
+        raise DatabaseConfigurationError("DATABASE_URL deve ser uma URL PostgreSQL válida")
+    if parts.hostname == "host":
+        raise DatabaseConfigurationError("DATABASE_URL ainda usa o servidor de exemplo 'host'; informe o endereço real do PostgreSQL")
+    try:
+        port = parts.port or 5432
+    except ValueError as error:
+        raise DatabaseConfigurationError("DATABASE_URL tem uma porta inválida") from error
     local = parts.hostname in ("localhost", "127.0.0.1", "::1")
-    return pg8000.dbapi.connect(
-        user=unquote(parts.username or ""),
-        password=unquote(parts.password or ""),
-        host=parts.hostname,
-        port=parts.port or 5432,
-        database=unquote(parts.path.lstrip("/") or "postgres"),
-        ssl_context=False if local else _ssl_context(parts.hostname),
-        timeout=10,
-    )
+    try:
+        return pg8000.dbapi.connect(
+            user=unquote(parts.username or ""),
+            password=unquote(parts.password or ""),
+            host=parts.hostname,
+            port=port,
+            database=unquote(parts.path.lstrip("/") or "postgres"),
+            ssl_context=False if local else _ssl_context(parts.hostname),
+            timeout=10,
+        )
+    except (pg8000.dbapi.InterfaceError, pg8000.dbapi.DatabaseError) as error:
+        raise DatabaseUnavailableError("Não foi possível conectar ao PostgreSQL; confira DATABASE_URL, acesso à rede e se o banco está ativo") from error
 
 
 @contextmanager

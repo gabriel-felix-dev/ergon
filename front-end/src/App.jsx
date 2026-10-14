@@ -7,20 +7,20 @@ const readSession = () => {
 
 const fields = {
   assistencia: [
-    ['nome', 'Nome da assistência', 'text', true], ['documento', 'Documento', 'text', true],
+    ['nome', 'Nome da assistência', 'text', true], ['documento', 'CNPJ', 'cnpj', true],
     ['email', 'Email', 'email', true], ['telefone', 'Telefone', 'tel'], ['endereco', 'Endereço'],
   ],
   gerente: [
-    ['nome', 'Nome do gerente', 'text', true], ['documento', 'Documento do gerente', 'text', true],
+    ['nome', 'Nome do gerente', 'text', true], ['documento', 'CPF do gerente', 'cpf', true],
     ['email', 'Email do gerente', 'email', true], ['telefone', 'Telefone', 'tel'],
-    ['senha', 'Senha (mínimo 10 caracteres)', 'password', true],
+    ['senha', 'Senha (mínimo 8 caracteres)', 'password', true, 8],
   ],
   cliente: [
     ['nome', 'Nome', 'text', true], ['telefone', 'Telefone', 'tel', true],
-    ['email', 'Email', 'email', true], ['documento', 'Documento'], ['endereco', 'Endereço'],
+    ['email', 'Email', 'email', true], ['documento', 'CPF', 'cpf'], ['endereco', 'Endereço'],
   ],
   funcionario: [
-    ['nome', 'Nome', 'text', true], ['documento', 'Documento', 'text', true],
+    ['nome', 'Nome', 'text', true], ['documento', 'CPF', 'cpf', true],
     ['email', 'Email', 'email', true], ['telefone', 'Telefone', 'tel'],
   ],
   solicitacao: [
@@ -30,12 +30,52 @@ const fields = {
   ],
 }
 
+function formatCnpj(value) {
+  const digits = String(value ?? '').replace(/\D/g, '').slice(0, 14)
+  if (digits.length <= 2) return digits
+  if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`
+  if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`
+  if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`
+}
+
+function formatCpf(value) {
+  const digits = String(value ?? '').replace(/\D/g, '').slice(0, 11)
+  if (digits.length <= 3) return digits
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`
+}
+
+function formatPhone(value) {
+  const digits = String(value ?? '').replace(/\D/g, '').slice(0, 11)
+  if (!digits) return ''
+  if (digits.length <= 2) return `(${digits}${digits.length === 2 ? ')' : ''}`
+  const area = `(${digits.slice(0, 2)}) `
+  const number = digits.slice(2)
+  if (number.length <= 4) return area + number
+  const firstPart = digits.length === 11 ? 5 : 4
+  return `${area}${number.slice(0, firstPart)}-${number.slice(firstPart)}`
+}
+
+const masks = {
+  cnpj: { format: formatCnpj, maxLength: 18, placeholder: '00.000.000/0000-00' },
+  cpf: { format: formatCpf, maxLength: 14, placeholder: '000.000.000-00' },
+  tel: { format: formatPhone, maxLength: 15, placeholder: '(00) 00000-0000' },
+}
+
 function Inputs({ schema, values, setValues }) {
-  return <div className="fields">{schema.map(([key, label, type = 'text', required]) =>
+  return <div className="fields">{schema.map(([key, label, type = 'text', required, minLength]) =>
     <label key={key}>{label}
       {type === 'textarea'
         ? <textarea required={required} value={values[key] ?? ''} onChange={e => setValues({ ...values, [key]: e.target.value })} />
-        : <input type={type} required={required} value={values[key] ?? ''} onChange={e => setValues({ ...values, [key]: e.target.value })} />}
+        : <input type={type === 'cnpj' || type === 'cpf' ? 'text' : type} required={required}
+            inputMode={masks[type] ? 'numeric' : undefined}
+            maxLength={masks[type]?.maxLength}
+            minLength={minLength}
+            placeholder={masks[type]?.placeholder}
+            value={masks[type] ? masks[type].format(values[key]) : (values[key] ?? '')}
+            onChange={e => setValues({ ...values, [key]: masks[type] ? masks[type].format(e.target.value) : e.target.value })} />}
     </label>,
   )}</div>
 }
@@ -234,8 +274,8 @@ function App() {
       {!invitation ? <p>Carregando convite…</p> : <>
         <p>Você foi convidado por {invitation.Assistencia}. Email: {invitation.Email}</p>
         <form onSubmit={acceptInvite}>
-          <Inputs schema={[[ 'nome', 'Nome', 'text', true ], [ 'documento', 'Documento', 'text', true ],
-            [ 'telefone', 'Telefone', 'tel' ], [ 'senha', 'Senha (mínimo 10 caracteres)', 'password', true ]]}
+          <Inputs schema={[[ 'nome', 'Nome', 'text', true ], [ 'documento', 'CPF', 'cpf', true ],
+            [ 'telefone', 'Telefone', 'tel' ], [ 'senha', 'Senha (mínimo 8 caracteres)', 'password', true, 8 ]]}
             values={inviteForm} setValues={setInviteForm} />
           <button>Concluir cadastro</button>
         </form>
@@ -296,7 +336,7 @@ function App() {
       </form>
       <form onSubmit={resetPassword}>
         <Inputs schema={[[ 'codigo', 'Código de seis dígitos', 'text', true ],
-          [ 'senha', 'Nova senha (mínimo 10 caracteres)', 'password', true ]]}
+          [ 'senha', 'Nova senha (mínimo 8 caracteres)', 'password', true, 8 ]]}
           values={recoveryForm} setValues={setRecoveryForm} />
         <button>Definir senha</button>
       </form>
@@ -412,7 +452,7 @@ function Clients({ data, act }) {
   </Card><Card title="Clientes"><div className="list">{data.clients.map(c => <div className="row" key={c.Id}>
     <div><strong>{c.Nome}</strong><small>{c.Email} · {c.Telefone} · {c.Ativo ? 'Ativo' : 'Inativo'}</small></div>
     <div className="row-actions"><button className="textbutton" onClick={() => selectClient(c)}>Aparelhos / OS</button>
-      <button className="textbutton" onClick={() => { setEditing(c.Id); setForm({ nome: c.Nome, documento: c.Documento || '', email: c.Email, telefone: c.Telefone, endereco: c.Endereco || '' }) }}>Editar</button>
+      <button className="textbutton" onClick={() => { setEditing(c.Id); setForm({ nome: c.Nome, documento: formatCpf(c.Documento), email: c.Email, telefone: formatPhone(c.Telefone), endereco: c.Endereco || '' }) }}>Editar</button>
       {c.Ativo && <button className="textbutton danger" onClick={() => { if (window.confirm('Desativar este cliente?')) act(`/clientes/${c.Id}`, 'DELETE', undefined, 'Cliente desativado.') }}>Desativar</button>}</div>
   </div>)}</div></Card>
     {deviceClient && <Card title={`Aparelhos e OS · ${deviceClient.Nome}`} className="full">
@@ -459,14 +499,14 @@ function Employees({ data, act }) {
       <div className="actions"><button>Salvar</button>{editing && <button type="button" className="secondary" onClick={() => { setEditing(null); setForm({}) }}>Cancelar</button>}</div>
     </form></Card><Card title="Equipe"><div className="list">{data.employees.map(f => <div className="row" key={f.Id}>
       <div><strong>{f.Nome || 'Convite pendente'}</strong><small>{f.Email} · {f.Gerente ? 'Gerente' : 'Funcionário'} · {f.Ativo ? 'Ativo' : 'Inativo'}</small></div>
-      <div className="row-actions"><button className="textbutton" onClick={() => { setEditing(f.Id); setForm({ nome: f.Nome || '', documento: f.Documento || '', email: f.Email, telefone: f.Telefone || '', gerente: f.Gerente, ativo: f.Ativo }) }}>Editar</button>
+      <div className="row-actions"><button className="textbutton" onClick={() => { setEditing(f.Id); setForm({ nome: f.Nome || '', documento: formatCpf(f.Documento), email: f.Email, telefone: formatPhone(f.Telefone), gerente: f.Gerente, ativo: f.Ativo }) }}>Editar</button>
         {f.Ativo && <button className="textbutton danger" onClick={() => { if (window.confirm('Desativar este funcionário?')) act(`/funcionarios/${f.Id}`, 'DELETE', undefined, 'Funcionário desativado.') }}>Desativar</button>}</div>
     </div>)}</div></Card></div>
 }
 
 function Assistance({ data, act, logout }) {
   const a = data.assistance
-  const [form, setForm] = useState({ nome: a.Nome, documento: a.Documento, email: a.Email, telefone: a.Telefone || '', endereco: a.Endereco || '' })
+  const [form, setForm] = useState({ nome: a.Nome, documento: formatCnpj(a.Documento), email: a.Email, telefone: formatPhone(a.Telefone), endereco: a.Endereco || '' })
   return <Card title="Dados da assistência" className="auth wide"><form onSubmit={e => { e.preventDefault(); act(`/assistencias/${a.Id}`, 'PUT', form, 'Assistência atualizada.') }}>
     <Inputs schema={fields.assistencia} values={form} setValues={setForm} /><button>Salvar alterações</button>
   </form><hr /><button className="danger-button" onClick={async () => {
