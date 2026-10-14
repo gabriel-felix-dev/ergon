@@ -2,7 +2,9 @@
 
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+import hmac
 import os
+import secrets
 from urllib.parse import quote
 
 import pg8000.dbapi
@@ -13,7 +15,7 @@ from flask_mail import Mail, Message
 import auth
 from db import all_rows, execute, one, transaction
 from services import (
-    RuleError, create_budget, create_online_request, decide_budget, list_budgets,
+    RuleError, create_online_request, decide_budget, list_budgets,
     list_orders, public_budget, register_payment, resend_link, respond_budget,
     update_order,
 )
@@ -128,8 +130,17 @@ def token():
 
 def actor(manager=False):
     user = auth.principal(token())
+    if user["tipo"] != "funcionario":
+        raise RuleError("Ação restrita à equipe", 403)
     if manager and not user["gerente"]:
         raise RuleError("Ação restrita a gerente", 403)
+    return user
+
+
+def client_actor():
+    user = auth.principal(token())
+    if user["tipo"] != "cliente":
+        raise RuleError("Ação restrita ao cliente", 403)
     return user
 
 
@@ -147,9 +158,22 @@ def active_employee(connection, assistance_id, employee_id):
 
 
 def send_budget_email(raw_token, recipient):
+    link = frontend_link("orcamento", raw_token)
+    send_email("Seu orçamento Ergon", recipient,
+               "Abra seu orçamento e aprove ou recuse em até dois dias:\n" + link)
+
+
+def frontend_link(parameter, value=None):
+    base = setting("PUBLIC_FRONTEND_URL")
+    if not base:
+        raise RuleError("Configure PUBLIC_FRONTEND_URL para enviar emails", 503)
+    return base.rstrip("/") + ("/?" + parameter + "=" + quote(str(value)) if value else "/?" + parameter)
+
+
+def send_email(subject, recipient, content):
     required = ("MAIL_SERVER", "MAIL_DEFAULT_SENDER", "PUBLIC_FRONTEND_URL")
     if any(not setting(name) for name in required):
-        raise RuleError("Configure SMTP e PUBLIC_FRONTEND_URL para enviar o orçamento", 503)
+        raise RuleError("Configure SMTP e PUBLIC_FRONTEND_URL para enviar emails", 503)
     app.config.update(
         MAIL_SERVER=setting("MAIL_SERVER"),
         MAIL_PORT=int(setting("MAIL_PORT") or 587),
@@ -158,14 +182,14 @@ def send_budget_email(raw_token, recipient):
         MAIL_PASSWORD=setting("MAIL_PASSWORD"),
         MAIL_DEFAULT_SENDER=setting("MAIL_DEFAULT_SENDER"),
     )
-    link = setting("PUBLIC_FRONTEND_URL").rstrip("/") + "/?orcamento=" + quote(raw_token)
-    message = Message("Seu orçamento Ergon", recipients=[recipient])
-    message.body = "Abra seu orçamento e aprove ou recuse em até dois dias:\n" + link
+    mailer = Mail(app)
+    message = Message(subject, recipients=[recipient])
+    message.body = content
     try:
-        Mail(app).send(message)
+        mailer.send(message)
     except Exception as error:
-        app.logger.error("Falha ao enviar email do orçamento: %s", type(error).__name__)
-        raise RuleError("Email não enviado. Use a opção de reenviar link.", 502) from error
+        app.logger.error("Falha ao enviar email: %s", type(error).__name__)
+        raise RuleError("Email não enviado. Verifique o SMTP e tente novamente.", 502) from error
 
 
 @app.get("/api/saude")
@@ -247,7 +271,96 @@ def logout():
 
 @app.get("/api/me")
 def me():
-    return jsonify(actor())
+    return jsonify(auth.principal(token()))
+
+
+@app.post("/api/clientes/login")
+def client_login():
+    data = body()
+    return jsonify(auth.login(integer(data, "assistenciaId"), email(data),
+                             text(data, "senha", 256), "cliente"))
+
+
+def account_table(kind):
+    if kind == "cliente":
+        return 'public."Cliente"', '"IdCliente"'
+    if kind == "funcionario":
+        return 'public."Funcionario"', '"IdFuncionario"'
+    raise RuleError("tipo deve ser cliente ou funcionario", 400)
+
+
+@app.post("/api/senhas/recuperacao")
+def request_password_reset():
+    data = body()
+    assistance_id = integer(data, "assistenciaId")
+    address = email(data)
+    kind = text(data, "tipo", 20)
+    table, id_column = account_table(kind)
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    with transaction() as connection:
+        account = one(connection, f'''SELECT u."Id" FROM {table} u
+            JOIN public."AssistenciaTecnica" a ON a."Id" = u."IdAssistenciaTecnica"
+            WHERE u."IdAssistenciaTecnica" = %s AND LOWER(u."Email") = LOWER(%s)
+              AND u."Ativo" = TRUE AND a."Ativo" = TRUE''', (assistance_id, address))
+        if account:
+            recent = one(connection, f'''SELECT r."Id" FROM public."RecuperacaoSenha" r
+                WHERE r.{id_column} = %s AND r."IdAssistenciaTecnica" = %s
+                  AND r."CriadoEm" > CURRENT_TIMESTAMP - INTERVAL '1 minute'
+                LIMIT 1''', (account["Id"], assistance_id))
+            if recent:
+                raise RuleError("Aguarde um minuto antes de pedir outro código", 429)
+            execute(connection, f'''UPDATE public."RecuperacaoSenha" SET "UsadoEm" = CURRENT_TIMESTAMP
+                WHERE {id_column} = %s AND "IdAssistenciaTecnica" = %s AND "UsadoEm" IS NULL''',
+                (account["Id"], assistance_id))
+            send_email("Código para recuperar acesso Ergon", address,
+                       "Seu código para definir uma nova senha é: " + code +
+                       "\nEle vence em 15 minutos. Se você não solicitou, ignore este email.")
+            execute(connection, f'''INSERT INTO public."RecuperacaoSenha"
+                ("IdAssistenciaTecnica", {id_column}, "CodigoHash", "ExpiraEm")
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP + INTERVAL '15 minutes')''',
+                (assistance_id, account["Id"], auth.secret_hash(code)))
+    return jsonify({"mensagem": "Se o email estiver cadastrado, o código será enviado."})
+
+
+@app.post("/api/senhas/redefinicao")
+def reset_password():
+    data = body()
+    assistance_id = integer(data, "assistenciaId")
+    address = email(data)
+    kind = text(data, "tipo", 20)
+    table, id_column = account_table(kind)
+    code = text(data, "codigo", 6)
+    if len(code) != 6 or not code.isdigit():
+        raise RuleError("Código inválido", 400)
+    hashed = auth.password_hash(text(data, "senha", 256))
+    with transaction() as connection:
+        account = one(connection, f'''SELECT u."Id" FROM {table} u
+            WHERE u."IdAssistenciaTecnica" = %s AND LOWER(u."Email") = LOWER(%s)
+              AND u."Ativo" = TRUE FOR UPDATE''', (assistance_id, address))
+        if not account:
+            raise RuleError("Código inválido ou vencido", 400)
+        attempt = one(connection, f'''SELECT * FROM public."RecuperacaoSenha"
+            WHERE {id_column} = %s AND "IdAssistenciaTecnica" = %s
+              AND "UsadoEm" IS NULL AND "ExpiraEm" > CURRENT_TIMESTAMP
+            ORDER BY "Id" DESC LIMIT 1 FOR UPDATE''', (account["Id"], assistance_id))
+        if not attempt or attempt["Tentativas"] >= 5:
+            raise RuleError("Código inválido ou vencido", 400)
+        if not hmac.compare_digest(attempt["CodigoHash"], auth.secret_hash(code)):
+            execute(connection, '''UPDATE public."RecuperacaoSenha"
+                SET "Tentativas" = "Tentativas" + 1 WHERE "Id" = %s''', (attempt["Id"],))
+            # Retornar após o commit para preservar a contagem de tentativas.
+            invalid = True
+        else:
+            invalid = False
+            execute(connection, f'''UPDATE {table}
+                SET "SenhaHash" = %s, "VersaoSessao" = "VersaoSessao" + 1
+                WHERE "Id" = %s AND "IdAssistenciaTecnica" = %s''',
+                (hashed, account["Id"], assistance_id))
+            execute(connection, '''UPDATE public."RecuperacaoSenha"
+                SET "UsadoEm" = CURRENT_TIMESTAMP WHERE "Id" = %s''', (attempt["Id"],))
+    if invalid:
+        raise RuleError("Código inválido ou vencido", 400)
+    return jsonify({"mensagem": "Senha definida. Entre com seu email e nova senha."})
 
 
 @app.get("/api/funcionarios")
@@ -264,15 +377,66 @@ def employees():
 def create_employee():
     user = actor(manager=True)
     data = body()
-    hashed = auth.password_hash(text(data, "senha", 256))
+    address = email(data)
+    raw_token = secrets.token_urlsafe(32)
     with transaction() as connection:
         item = one(connection, '''INSERT INTO public."Funcionario"
-            ("IdAssistenciaTecnica", "Nome", "Documento", "Email", "Telefone", "Gerente", "SenhaHash")
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ("IdAssistenciaTecnica", "Email", "Gerente", "Ativo")
+            VALUES (%s, %s, FALSE, FALSE)
             RETURNING "Id", "IdAssistenciaTecnica", "Nome", "Documento", "Email", "Telefone", "Gerente", "Ativo"''',
-            (user["assistenciaId"], text(data, "nome"), text(data, "documento", 30),
-             email(data), text(data, "telefone", 30, False), data.get("gerente") is True, hashed))
+            (user["assistenciaId"], address))
+        execute(connection, '''INSERT INTO public."ConviteFuncionario"
+            ("IdAssistenciaTecnica", "IdFuncionario", "TokenHash", "ExpiraEm")
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP + INTERVAL '24 hours')''',
+            (user["assistenciaId"], item["Id"], auth.secret_hash(raw_token)))
+        send_email("Convite para trabalhar no Ergon", address,
+                   "O gerente convidou você para acessar a assistência. "
+                   "Complete seu cadastro e defina sua senha em até 24 horas:\n" +
+                   frontend_link("convite", raw_token))
     return jsonify(item), 201
+
+
+@app.get("/api/funcionarios/convites/<raw_token>")
+def invitation(raw_token):
+    with transaction() as connection:
+        item = one(connection, '''SELECT f."Email", a."Nome" AS "Assistencia"
+            FROM public."ConviteFuncionario" i
+            JOIN public."Funcionario" f ON f."Id" = i."IdFuncionario"
+            JOIN public."AssistenciaTecnica" a ON a."Id" = i."IdAssistenciaTecnica"
+            WHERE i."TokenHash" = %s AND i."UsadoEm" IS NULL
+              AND i."ExpiraEm" > CURRENT_TIMESTAMP AND a."Ativo" = TRUE''',
+            (auth.secret_hash(raw_token),))
+    if not item:
+        raise RuleError("Convite inválido ou vencido", 404)
+    return jsonify(item)
+
+
+@app.post("/api/funcionarios/convites/<raw_token>")
+def accept_invitation(raw_token):
+    data = body()
+    hashed = auth.password_hash(text(data, "senha", 256))
+    with transaction() as connection:
+        invite = one(connection, '''SELECT i."Id", i."IdFuncionario", i."IdAssistenciaTecnica"
+            FROM public."ConviteFuncionario" i
+            JOIN public."AssistenciaTecnica" a ON a."Id" = i."IdAssistenciaTecnica"
+            WHERE i."TokenHash" = %s AND i."UsadoEm" IS NULL
+              AND i."ExpiraEm" > CURRENT_TIMESTAMP AND a."Ativo" = TRUE
+            FOR UPDATE OF i''', (auth.secret_hash(raw_token),))
+        if not invite:
+            raise RuleError("Convite inválido ou vencido", 404)
+        item = one(connection, '''UPDATE public."Funcionario"
+            SET "Nome" = %s, "Documento" = %s, "Telefone" = %s,
+                "SenhaHash" = %s, "Ativo" = TRUE
+            WHERE "Id" = %s AND "IdAssistenciaTecnica" = %s AND "SenhaHash" IS NULL
+            RETURNING "Id", "IdAssistenciaTecnica", "Nome", "Email", "Ativo"''',
+            (text(data, "nome"), text(data, "documento", 30),
+             text(data, "telefone", 30, False), hashed,
+             invite["IdFuncionario"], invite["IdAssistenciaTecnica"]))
+        if not item:
+            raise RuleError("Este convite já foi usado", 409)
+        execute(connection, '''UPDATE public."ConviteFuncionario"
+            SET "UsadoEm" = CURRENT_TIMESTAMP WHERE "Id" = %s''', (invite["Id"],))
+    return jsonify(item)
 
 
 def keep_manager(connection, assistance_id, employee_id, new_manager, new_active):
@@ -297,6 +461,11 @@ def edit_employee(employee_id):
     with transaction() as connection:
         one(connection, '''SELECT "Id" FROM public."AssistenciaTecnica" WHERE "Id" = %s FOR UPDATE''', (user["assistenciaId"],))
         keep_manager(connection, user["assistenciaId"], employee_id, manager, active)
+        account = one(connection, '''SELECT "SenhaHash" FROM public."Funcionario"
+            WHERE "Id" = %s AND "IdAssistenciaTecnica" = %s''',
+            (employee_id, user["assistenciaId"]))
+        if active and not account["SenhaHash"]:
+            raise RuleError("O funcionário deve concluir o convite antes de ser ativado")
         item = one(connection, '''UPDATE public."Funcionario"
             SET "Nome" = %s, "Documento" = %s, "Email" = %s, "Telefone" = %s, "Gerente" = %s, "Ativo" = %s
             WHERE "Id" = %s AND "IdAssistenciaTecnica" = %s
@@ -349,7 +518,8 @@ def create_client():
 def get_client(client_id):
     user = actor()
     with transaction() as connection:
-        item = one(connection, '''SELECT * FROM public."Cliente"
+        item = one(connection, '''SELECT "Id", "IdAssistenciaTecnica", "Nome", "Documento",
+            "Email", "Telefone", "Endereco", "Ativo" FROM public."Cliente"
             WHERE "Id" = %s AND "IdAssistenciaTecnica" = %s''', (client_id, user["assistenciaId"]))
     if not item:
         raise RuleError("Cliente não encontrado", 404)
@@ -363,7 +533,9 @@ def edit_client(client_id):
     with transaction() as connection:
         item = one(connection, '''UPDATE public."Cliente"
             SET "Nome" = %s, "Documento" = %s, "Email" = %s, "Telefone" = %s, "Endereco" = %s
-            WHERE "Id" = %s AND "IdAssistenciaTecnica" = %s RETURNING *''',
+            WHERE "Id" = %s AND "IdAssistenciaTecnica" = %s
+            RETURNING "Id", "IdAssistenciaTecnica", "Nome", "Documento",
+                "Email", "Telefone", "Endereco", "Ativo"''',
             (text(data, "nome"), text(data, "documento", 30, False), email(data),
              text(data, "telefone", 30), text(data, "endereco", 500, False),
              client_id, user["assistenciaId"]))
@@ -388,7 +560,7 @@ def deactivate_client(client_id):
 def devices(client_id):
     user = actor()
     with transaction() as connection:
-        rows = all_rows(connection, '''SELECT "Id", "IdCliente", "Marca", "Modelo", "TipoAparelho"
+        rows = all_rows(connection, '''SELECT "Id", "IdCliente", "Marca", "Modelo", "TipoAparelho", "Ativo"
             FROM public."Aparelho" WHERE "IdCliente" = %s AND "IdAssistenciaTecnica" = %s
             ORDER BY "Id" DESC''', (client_id, user["assistenciaId"]))
     return jsonify(rows)
@@ -406,18 +578,55 @@ def create_device(client_id):
             raise RuleError("Cliente não encontrado ou inativo", 404)
         item = one(connection, '''INSERT INTO public."Aparelho"
             ("IdAssistenciaTecnica", "IdCliente", "Marca", "Modelo", "TipoAparelho")
-            VALUES (%s, %s, %s, %s, %s) RETURNING "Id", "IdCliente", "Marca", "Modelo", "TipoAparelho"''',
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING "Id", "IdCliente", "Marca", "Modelo", "TipoAparelho", "Ativo"''',
             (user["assistenciaId"], client_id, text(data, "marca", 100),
              text(data, "modelo", 100), text(data, "tipoAparelho", 100, False)))
     return jsonify(item), 201
 
 
+@app.put("/api/clientes/<int:client_id>/aparelhos/<int:device_id>")
+def edit_device(client_id, device_id):
+    user = actor()
+    data = body()
+    with transaction() as connection:
+        item = one(connection, '''UPDATE public."Aparelho"
+            SET "Marca" = %s, "Modelo" = %s, "TipoAparelho" = %s
+            WHERE "Id" = %s AND "IdCliente" = %s AND "IdAssistenciaTecnica" = %s
+            RETURNING "Id", "IdCliente", "Marca", "Modelo", "TipoAparelho", "Ativo"''',
+            (text(data, "marca", 100), text(data, "modelo", 100),
+             text(data, "tipoAparelho", 100, False), device_id, client_id,
+             user["assistenciaId"]))
+    if not item:
+        raise RuleError("Aparelho não encontrado", 404)
+    return jsonify(item)
+
+
+@app.delete("/api/clientes/<int:client_id>/aparelhos/<int:device_id>")
+def deactivate_device(client_id, device_id):
+    user = actor()
+    with transaction() as connection:
+        item = one(connection, '''UPDATE public."Aparelho" SET "Ativo" = FALSE
+            WHERE "Id" = %s AND "IdCliente" = %s AND "IdAssistenciaTecnica" = %s
+            RETURNING "Id", "Ativo"''', (device_id, client_id, user["assistenciaId"]))
+    if not item:
+        raise RuleError("Aparelho não encontrado", 404)
+    return jsonify(item)
+
+
 @app.post("/api/assistencias/<int:assistance_id>/solicitacoes")
 def online_request(assistance_id):
     data = body()
+    def confirmation(address, budget_id):
+        send_email("Solicitação de orçamento registrada no Ergon", address,
+                   f"Sua solicitação de orçamento #{budget_id} foi registrada. "
+                   "Para acessar o sistema, abra Clique aqui, peça um código de "
+                   "recuperação de senha e defina sua senha:\n" +
+                   frontend_link("recuperar"))
     item = create_online_request(assistance_id, text(data, "nome"), text(data, "telefone", 30),
                                  email(data), text(data, "marca", 100),
-                                 text(data, "modelo", 100), text(data, "defeito", 5000))
+                                 text(data, "modelo", 100), text(data, "defeito", 5000),
+                                 confirmation)
     return jsonify(item), 201
 
 
@@ -427,28 +636,6 @@ def budgets():
     return jsonify(list_budgets(user["assistenciaId"], request.args.get("clienteId", type=int)))
 
 
-@app.post("/api/orcamentos")
-def create_budget_route():
-    user = actor()
-    data = body()
-    origin = text(data, "origem", 20)
-    if origin not in ("LojaImediata", "LojaPosterior"):
-        raise RuleError("Atendimento na loja requer origem de loja", 400)
-    client_id = integer(data, "clienteId")
-    device_id = integer(data, "aparelhoId")
-    with transaction() as connection:
-        valid = one(connection, '''SELECT a."Id" FROM public."Aparelho" a
-            JOIN public."Cliente" c ON c."Id" = a."IdCliente"
-            WHERE a."Id" = %s AND a."IdCliente" = %s
-              AND a."IdAssistenciaTecnica" = %s AND c."Ativo" = TRUE''',
-            (device_id, client_id, user["assistenciaId"]))
-        if not valid:
-            raise RuleError("Aparelho não pertence ao cliente ativo", 400)
-    item = create_budget(user["assistenciaId"], client_id, device_id, origin,
-                         text(data, "descricaoProblemaCliente", 5000))
-    return jsonify(item), 201
-
-
 @app.put("/api/orcamentos/<int:budget_id>/resposta")
 def respond_budget_route(budget_id):
     user = actor()
@@ -456,9 +643,8 @@ def respond_budget_route(budget_id):
     item, raw_token, recipient = respond_budget(
         user["assistenciaId"], budget_id, user["id"],
         text(data, "diagnosticoFuncionario", 5000), money(data, "valorMaoDeObra"),
-        money(data, "valorPecas"), day(data, "prazoConclusao"))
-    if item["Origem"] != "LojaImediata":
-        send_budget_email(raw_token, recipient)
+        money(data, "valorPecas"), day(data, "prazoConclusao"), send_budget_email,
+        text(data, "descricaoProblemaCliente", 5000) if data.get("descricaoProblemaCliente") else None)
     return jsonify(item)
 
 
@@ -467,31 +653,6 @@ def resend_budget_route(budget_id):
     user = actor()
     resend_link(user["assistenciaId"], budget_id, send_budget_email)
     return jsonify({"enviado": True})
-
-
-@app.post("/api/orcamentos/<int:budget_id>/decisao")
-def decide_budget_route(budget_id):
-    user = actor()
-    data = body()
-    approve = data.get("aprovar")
-    if not isinstance(approve, bool):
-        raise RuleError("aprovar deve ser verdadeiro ou falso", 400)
-    with transaction() as connection:
-        item = one(connection, '''SELECT "Origem" FROM public."Orcamento"
-            WHERE "Id" = %s AND "IdAssistenciaTecnica" = %s''',
-            (budget_id, user["assistenciaId"]))
-        if not item:
-            raise RuleError("Orçamento não encontrado", 404)
-        if item["Origem"] != "LojaImediata":
-            raise RuleError("A decisão deste orçamento cabe ao cliente", 403)
-        responsible = data.get("funcionarioResponsavelId")
-        if responsible is not None:
-            responsible = integer(data, "funcionarioResponsavelId")
-            active_employee(connection, user["assistenciaId"], responsible)
-    result = decide_budget(user["assistenciaId"], budget_id, approve, responsible, True)
-    if result.get("expired"):
-        return jsonify({"erro": "Prazo encerrado; orçamento cancelado"}), 409
-    return jsonify(result)
 
 
 @app.get("/api/orcamentos/acesso/<raw_token>")
@@ -510,7 +671,12 @@ def public_decision_route(raw_token):
         raise RuleError("Este orçamento é decidido no atendimento", 403)
     result = decide_budget(item["IdAssistenciaTecnica"], item["Id"], approve,
                            device_received=item["Origem"] == "LojaPosterior",
-                           expected_token=raw_token)
+                           expected_token=raw_token,
+                           send=(lambda address, order_id: send_email(
+                               "Ordem de serviço criada no Ergon", address,
+                               f"O orçamento #{item['Id']} foi aprovado e a OS #{order_id} foi criada. "
+                               "Acompanhe o serviço pelo seu link:\n" +
+                               frontend_link("orcamento", raw_token))) if approve else None)
     if result.get("expired"):
         return jsonify({"erro": "Prazo encerrado; orçamento cancelado"}), 409
     return jsonify(result)
@@ -528,6 +694,59 @@ def client_orders(client_id):
     return jsonify(list_orders(user["assistenciaId"], client_id))
 
 
+@app.get("/api/clientes/me/orcamentos")
+def my_budgets():
+    user = client_actor()
+    return jsonify(list_budgets(user["assistenciaId"], user["id"]))
+
+
+@app.get("/api/clientes/me/ordens-servico")
+def my_orders():
+    user = client_actor()
+    return jsonify(list_orders(user["assistenciaId"], user["id"]))
+
+
+@app.get("/api/clientes/me/aparelhos")
+def my_devices():
+    user = client_actor()
+    with transaction() as connection:
+        items = all_rows(connection, '''SELECT "Id", "Marca", "Modelo", "TipoAparelho", "Ativo"
+            FROM public."Aparelho" WHERE "IdAssistenciaTecnica" = %s AND "IdCliente" = %s
+            ORDER BY "Id" DESC''', (user["assistenciaId"], user["id"]))
+    return jsonify(items)
+
+
+@app.post("/api/clientes/me/solicitacoes")
+def my_request():
+    user = client_actor()
+    data = body()
+    problem = text(data, "defeito", 5000)
+    with transaction() as connection:
+        if data.get("aparelhoId") is not None:
+            device_id = integer(data, "aparelhoId")
+            device = one(connection, '''SELECT "Id" FROM public."Aparelho"
+                WHERE "Id" = %s AND "IdCliente" = %s
+                  AND "IdAssistenciaTecnica" = %s AND "Ativo" = TRUE''',
+                (device_id, user["id"], user["assistenciaId"]))
+            if not device:
+                raise RuleError("Aparelho não encontrado ou inativo", 404)
+        else:
+            device = one(connection, '''INSERT INTO public."Aparelho"
+                ("IdAssistenciaTecnica", "IdCliente", "Marca", "Modelo")
+                VALUES (%s, %s, %s, %s) RETURNING "Id"''',
+                (user["assistenciaId"], user["id"],
+                 text(data, "marca", 100), text(data, "modelo", 100)))
+        item = one(connection, '''INSERT INTO public."Orcamento"
+            ("IdAssistenciaTecnica", "IdCliente", "IdAparelho", "Origem",
+             "DescricaoProblemaCliente")
+            VALUES (%s, %s, %s, 'Online', %s) RETURNING "Id", "Status"''',
+            (user["assistenciaId"], user["id"], device["Id"], problem))
+        send_email("Solicitação de orçamento registrada no Ergon", user["email"],
+                   f"Sua solicitação de orçamento #{item['Id']} foi registrada. "
+                   "Acompanhe seus pedidos no sistema:\n" + frontend_link("entrar"))
+    return jsonify(item), 201
+
+
 @app.put("/api/ordens-servico/<int:order_id>")
 def change_order(order_id):
     user = actor()
@@ -538,7 +757,12 @@ def change_order(order_id):
     if responsible is not None:
         with transaction() as connection:
             active_employee(connection, user["assistenciaId"], responsible)
-    return jsonify(update_order(user["assistenciaId"], order_id, action, responsible, completion_date))
+    def notify_client(address, status):
+        send_email("Atualização da ordem de serviço Ergon", address,
+                   f"A OS #{order_id} foi encerrada com status {status}. "
+                   "Consulte seus dados no sistema:\n" + frontend_link("entrar"))
+    return jsonify(update_order(user["assistenciaId"], order_id, action, responsible,
+                                completion_date, notify_client))
 
 
 @app.post("/api/ordens-servico/<int:order_id>/pagamentos")
@@ -546,7 +770,8 @@ def pay_order(order_id):
     user = actor()
     data = body()
     item = register_payment(user["assistenciaId"], order_id, money(data, "valor"),
-                            text(data, "formaPagamento", 100))
+                            text(data, "formaPagamento", 100),
+                            day(data, "dataPagamento") if data.get("dataPagamento") else None)
     return jsonify(item), 201
 
 

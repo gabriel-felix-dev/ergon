@@ -1,14 +1,19 @@
-"""Credenciais e sessões dos funcionários."""
+"""Senhas e sessões JWT de funcionários e clientes."""
 
+from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
+import os
 import secrets
+
+import jwt
 
 from db import execute, one, transaction
 from services import RuleError
 
 
 ITERATIONS = 600_000
+SESSION_HOURS = 12
 
 
 def password_hash(password):
@@ -32,56 +37,92 @@ def verify_password(password, stored):
         return False
 
 
-def login(assistance_id, email, password):
+def _secret():
+    value = os.environ.get("JWT_SECRET", "")
+    if len(value) < 32:
+        raise RuntimeError("Configure JWT_SECRET com pelo menos 32 caracteres")
+    return value
+
+
+def _table(kind):
+    if kind == "funcionario":
+        return 'public."Funcionario"'
+    if kind == "cliente":
+        return 'public."Cliente"'
+    raise RuleError("Tipo de acesso inválido", 400)
+
+
+def login(assistance_id, email, password, kind="funcionario"):
+    table = _table(kind)
     with transaction() as connection:
         user = one(
             connection,
-            '''SELECT f."Id", f."Nome", f."Email", f."SenhaHash", f."Ativo",
-                      f."Gerente", a."Ativo" AS "AssistenciaAtiva"
-                 FROM public."Funcionario" f
-                 JOIN public."AssistenciaTecnica" a ON a."Id" = f."IdAssistenciaTecnica"
-                WHERE f."IdAssistenciaTecnica" = %s AND LOWER(f."Email") = LOWER(%s)''',
+            f'''SELECT u."Id", u."Nome", u."Email", u."SenhaHash", u."Ativo",
+                       u."VersaoSessao", a."Ativo" AS "AssistenciaAtiva"
+                       {', u."Gerente"' if kind == 'funcionario' else ''}
+                  FROM {table} u
+                  JOIN public."AssistenciaTecnica" a ON a."Id" = u."IdAssistenciaTecnica"
+                 WHERE u."IdAssistenciaTecnica" = %s AND LOWER(u."Email") = LOWER(%s)''',
             (assistance_id, email),
         )
-        if not user or not user["Ativo"] or not user["AssistenciaAtiva"] or not verify_password(password, user["SenhaHash"]):
-            raise RuleError("Credenciais inválidas", 401)
-        token = secrets.token_urlsafe(32)
-        digest = hashlib.sha256(token.encode()).hexdigest()
-        execute(
-            connection,
-            '''INSERT INTO public."SessaoAcesso"
-                   ("TokenHash", "IdAssistenciaTecnica", "IdFuncionario", "ExpiraEm")
-               VALUES (%s, %s, %s, CURRENT_TIMESTAMP + INTERVAL '12 hours')''',
-            (digest, assistance_id, user["Id"]),
-        )
+    if not user or not user["Ativo"] or not user["AssistenciaAtiva"] or not verify_password(password, user["SenhaHash"]):
+        raise RuleError("Credenciais inválidas", 401)
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(user["Id"]), "kind": kind, "assistanceId": assistance_id,
+        "version": user["VersaoSessao"], "iat": now,
+        "exp": now + timedelta(hours=SESSION_HOURS),
+    }
+    token = jwt.encode(payload, _secret(), algorithm="HS256")
     return {"token": token, "usuario": {
         "id": user["Id"], "nome": user["Nome"], "email": user["Email"],
-        "gerente": user["Gerente"], "assistenciaId": assistance_id,
+        "gerente": user.get("Gerente", False), "assistenciaId": assistance_id,
+        "tipo": kind,
     }}
 
 
 def principal(token):
     if not token:
         raise RuleError("Acesso não autenticado", 401)
-    digest = hashlib.sha256(token.encode()).hexdigest()
-    with transaction() as connection:
-        record = one(
-            connection,
-            '''SELECT s."IdAssistenciaTecnica", f."Id", f."Nome", f."Gerente",
-                      f."Ativo" AS "FuncionarioAtivo", a."Ativo" AS "AssistenciaAtiva"
-                 FROM public."SessaoAcesso" s
-                 JOIN public."Funcionario" f ON f."Id" = s."IdFuncionario"
-                 JOIN public."AssistenciaTecnica" a ON a."Id" = s."IdAssistenciaTecnica"
-                WHERE s."TokenHash" = %s AND s."ExpiraEm" > CURRENT_TIMESTAMP''',
-            (digest,),
+    try:
+        payload = jwt.decode(
+            token, _secret(), algorithms=["HS256"],
+            options={"require": ["exp", "iat", "sub", "kind", "assistanceId", "version"]},
         )
-    if not record or not record["AssistenciaAtiva"] or not record["FuncionarioAtivo"]:
+        kind = payload["kind"]
+        table = _table(kind)
+        account_id = int(payload["sub"])
+        assistance_id = int(payload["assistanceId"])
+        version = int(payload["version"])
+    except (jwt.InvalidTokenError, KeyError, ValueError, TypeError, RuleError) as error:
+        raise RuleError("Sessão inválida ou expirada", 401) from error
+    with transaction() as connection:
+        user = one(
+            connection,
+            f'''SELECT u."Id", u."Nome", u."Email", u."Ativo", u."VersaoSessao",
+                       a."Ativo" AS "AssistenciaAtiva"
+                       {', u."Gerente"' if kind == 'funcionario' else ''}
+                  FROM {table} u
+                  JOIN public."AssistenciaTecnica" a ON a."Id" = u."IdAssistenciaTecnica"
+                 WHERE u."Id" = %s AND u."IdAssistenciaTecnica" = %s''',
+            (account_id, assistance_id),
+        )
+    if not user or not user["Ativo"] or not user["AssistenciaAtiva"] or user["VersaoSessao"] != version:
         raise RuleError("Sessão inválida ou expirada", 401)
-    return {"id": record["Id"], "nome": record["Nome"],
-            "gerente": record["Gerente"], "assistenciaId": record["IdAssistenciaTecnica"]}
+    return {"id": user["Id"], "nome": user["Nome"], "email": user["Email"],
+            "gerente": user.get("Gerente", False), "assistenciaId": assistance_id,
+            "tipo": kind}
 
 
 def logout(token):
-    digest = hashlib.sha256(token.encode()).hexdigest()
+    user = principal(token)
+    table = _table(user["tipo"])
     with transaction() as connection:
-        execute(connection, '''DELETE FROM public."SessaoAcesso" WHERE "TokenHash" = %s''', (digest,))
+        execute(connection, f'''UPDATE {table} SET "VersaoSessao" = "VersaoSessao" + 1
+            WHERE "Id" = %s AND "IdAssistenciaTecnica" = %s''',
+            (user["id"], user["assistenciaId"]))
+
+
+def secret_hash(value):
+    """Hash para códigos de recuperação e links de convite."""
+    return hmac.new(_secret().encode(), value.encode(), hashlib.sha256).hexdigest()

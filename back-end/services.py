@@ -1,5 +1,6 @@
 """Regras de orçamento, ordem de serviço e pagamento."""
 
+from datetime import date
 import hashlib
 import secrets
 
@@ -80,13 +81,20 @@ def _safe_budget(item):
     return {key: value for key, value in item.items() if key != "AcessoTokenHash"}
 
 
-def create_online_request(assistance_id, name, phone, email, brand, model, problem):
+def create_online_request(assistance_id, name, phone, email, brand, model, problem, send):
     """Grava os três registros da solicitação pública em uma transação."""
     with transaction() as connection:
         active = one(connection, '''SELECT "Id" FROM public."AssistenciaTecnica"
                               WHERE "Id" = %s AND "Ativo" = TRUE''', (assistance_id,))
         if not active:
             raise RuleError("Assistência não encontrada", 404)
+        existing = one(connection, '''SELECT "Id" FROM public."Cliente"
+            WHERE "IdAssistenciaTecnica" = %s AND LOWER("Email") = LOWER(%s)''',
+            (assistance_id, email))
+        if existing:
+            raise RuleError(
+                "Este email já está cadastrado nesta assistência. "
+                "Acesse Clique aqui para recuperar a senha e entrar.", 409)
         client = one(connection, '''INSERT INTO public."Cliente"
                               ("IdAssistenciaTecnica", "Nome", "Telefone", "Email")
                               VALUES (%s, %s, %s, %s) RETURNING "Id"''',
@@ -99,25 +107,29 @@ def create_online_request(assistance_id, name, phone, email, brand, model, probl
                             ("IdAssistenciaTecnica", "IdCliente", "IdAparelho", "Origem", "DescricaoProblemaCliente")
                             VALUES (%s, %s, %s, 'Online', %s) RETURNING "Id", "Status"''',
                    (assistance_id, client["Id"], device["Id"], problem))
+        send(email, item["Id"])
     return item
 
 
 def respond_budget(assistance_id, budget_id, employee_id, diagnosis,
-                   labor_value, parts_value, completion_date):
+                   labor_value, parts_value, completion_date, send, problem=None):
     if not diagnosis or not diagnosis.strip():
         raise RuleError("Diagnóstico é obrigatório", 400)
     if labor_value < 0 or parts_value < 0:
         raise RuleError("Os valores não podem ser negativos", 400)
     with transaction() as connection:
+        cancel_expired(connection, assistance_id)
         item = budget(connection, assistance_id, budget_id, lock=True)
-        if item["Status"] != "EmAnalise":
-            raise RuleError("Somente orçamentos em análise podem receber resposta")
+        if item["Status"] not in ("EmAnalise", "AguardandoAprovacao"):
+            raise RuleError("Somente orçamentos ainda não decididos podem ser corrigidos")
+        problem = problem or item["DescricaoProblemaCliente"]
         raw_token = secrets.token_urlsafe(32)
         item = one(
             connection,
             '''UPDATE public."Orcamento"
                   SET "IdFuncionario" = %s,
                       "DiagnosticoFuncionario" = %s,
+                      "DescricaoProblemaCliente" = %s,
                       "ValorMaoDeObra" = %s,
                       "ValorPecas" = %s,
                       "PrazoConclusao" = %s,
@@ -127,10 +139,11 @@ def respond_budget(assistance_id, budget_id, employee_id, diagnosis,
                       "Status" = 'AguardandoAprovacao'
                 WHERE "Id" = %s AND "IdAssistenciaTecnica" = %s
             RETURNING *''',
-            (employee_id, diagnosis.strip(), labor_value, parts_value,
+            (employee_id, diagnosis.strip(), problem, labor_value, parts_value,
              completion_date, hashlib.sha256(raw_token.encode()).hexdigest(), budget_id, assistance_id),
         )
         recipient = one(connection, '''SELECT "Email" FROM public."Cliente" WHERE "Id" = %s''', (item["IdCliente"],))
+        send(raw_token, recipient["Email"])
         return _safe_budget(item), raw_token, recipient["Email"]
 
 
@@ -173,7 +186,7 @@ def resend_link(assistance_id, budget_id, send):
 
 
 def decide_budget(assistance_id, budget_id, approve, repair_employee_id=None,
-                  device_received=False, expected_token=None):
+                  device_received=False, expected_token=None, send=None):
     with transaction() as connection:
         item = budget(connection, assistance_id, budget_id, lock=True)
         if expected_token is not None and item["AcessoTokenHash"] != hashlib.sha256(expected_token.encode()).hexdigest():
@@ -209,12 +222,12 @@ def decide_budget(assistance_id, budget_id, approve, repair_employee_id=None,
             raise RuleError("Funcionário responsável pelo reparo é obrigatório", 400)
         execute(
             connection,
-            '''UPDATE public."Orcamento" SET "Status" = 'Aprovado'
+            '''UPDATE public."Orcamento" SET "Status" = 'Aprovado', "Ativo" = FALSE
                 WHERE "Id" = %s''',
             (budget_id,),
         )
         status = "AguardandoReparo" if device_received else "AguardandoAparelho"
-        return one(
+        created = one(
             connection,
             '''INSERT INTO public."OrdemServico"
                    ("IdAssistenciaTecnica", "IdOrcamento", "IdFuncionario", "Status",
@@ -225,6 +238,12 @@ def decide_budget(assistance_id, budget_id, approve, repair_employee_id=None,
             (assistance_id, budget_id, responsible, status,
              device_received, item["PrazoConclusao"]),
         )
+        if send:
+            recipient = one(connection, '''SELECT "Email" FROM public."Cliente"
+                WHERE "Id" = %s AND "IdAssistenciaTecnica" = %s''',
+                (item["IdCliente"], assistance_id))
+            send(recipient["Email"], created["Id"])
+        return created
 
 
 def list_orders(assistance_id, client_id=None):
@@ -259,7 +278,7 @@ def order(connection, assistance_id, order_id, lock=False):
 
 
 def update_order(assistance_id, order_id, action, responsible=None,
-                 completion_date=None):
+                 completion_date=None, send=None):
     with transaction() as connection:
         item = order(connection, assistance_id, order_id, lock=True)
         if action == "receber" and item["Status"] == "AguardandoAparelho":
@@ -278,25 +297,37 @@ def update_order(assistance_id, order_id, action, responsible=None,
                             "DataRealConclusao" = CURRENT_TIMESTAMP
                       WHERE "Id" = %s RETURNING *'''
             params = (order_id,)
-        elif action == "entregar" and item["Status"] in ("ReparoConcluido", "Paga") and not item["DataEntregaAparelho"]:
+        elif action == "entregar" and item["Status"] == "ReparoConcluido" and not item["DataEntregaAparelho"]:
             sql = '''UPDATE public."OrdemServico"
                         SET "DataEntregaAparelho" = CURRENT_TIMESTAMP
                       WHERE "Id" = %s RETURNING *'''
             params = (order_id,)
-        elif action == "atribuir" and responsible is not None and item["Status"] != "Paga":
+        elif action == "atribuir" and responsible is not None and item["Status"] not in ("Paga", "Cancelada", "Desistencia"):
             sql = '''UPDATE public."OrdemServico" SET "IdFuncionario" = %s
                       WHERE "Id" = %s RETURNING *'''
             params = (responsible, order_id)
-        elif action == "previsao" and completion_date is not None and item["Status"] != "Paga":
+        elif action == "previsao" and completion_date is not None and item["Status"] not in ("Paga", "Cancelada", "Desistencia"):
             sql = '''UPDATE public."OrdemServico" SET "DataPrevisaoConclusao" = %s
                       WHERE "Id" = %s RETURNING *'''
             params = (completion_date, order_id)
+        elif action in ("cancelar", "desistencia") and item["Status"] not in ("Paga", "Cancelada", "Desistencia"):
+            sql = '''UPDATE public."OrdemServico" SET "Status" = %s
+                      WHERE "Id" = %s RETURNING *'''
+            params = ("Cancelada" if action == "cancelar" else "Desistencia", order_id)
         else:
             raise RuleError("Transição de ordem de serviço inválida")
-        return one(connection, sql, params)
+        updated = one(connection, sql, params)
+        if action in ("cancelar", "desistencia") and send:
+            recipient = one(connection, '''SELECT c."Email" FROM public."OrdemServico" os
+                JOIN public."Orcamento" o ON o."Id" = os."IdOrcamento"
+                JOIN public."Cliente" c ON c."Id" = o."IdCliente"
+                WHERE os."Id" = %s AND os."IdAssistenciaTecnica" = %s''',
+                (order_id, assistance_id))
+            send(recipient["Email"], updated["Status"])
+        return updated
 
 
-def register_payment(assistance_id, order_id, value, payment_method):
+def register_payment(assistance_id, order_id, value, payment_method, payment_date=None):
     if value <= 0 or not payment_method or not payment_method.strip():
         raise RuleError("Valor e forma de pagamento válidos são obrigatórios", 400)
     with transaction() as connection:
@@ -312,12 +343,14 @@ def register_payment(assistance_id, order_id, value, payment_method):
         )
         if existing:
             raise RuleError("A ordem de serviço já tem pagamento")
+        if payment_date is not None and payment_date > date.today():
+            raise RuleError("A data do pagamento não pode ser futura", 400)
         payment = one(
             connection,
             '''INSERT INTO public."Pagamento"
-                   ("IdOrdemServico", "Valor", "FormaPagamento")
-               VALUES (%s, %s, %s) RETURNING *''',
-            (order_id, value, payment_method.strip()),
+                   ("IdOrdemServico", "Valor", "FormaPagamento", "Data")
+               VALUES (%s, %s, %s, COALESCE(%s, CURRENT_TIMESTAMP)) RETURNING *''',
+            (order_id, value, payment_method.strip(), payment_date),
         )
         execute(
             connection,

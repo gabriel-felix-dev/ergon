@@ -8,14 +8,23 @@ Cada assistência terá seus próprios dados. Os relacionamentos entre registros
 
 ## Recorte da demonstração acadêmica local
 
-Este documento preserva a **visão completa** do produto. Para a demonstração local da primeira versão, o escopo confirmado em `.specs/IDEIA.md` é:
+Este documento preserva a **visão completa** do produto. Para a demonstração local, o escopo confirmado em `.specs/IDEIA.md` é:
 
-- Cadastro e acesso de assistência e funcionários; cadastro de clientes e aparelhos.
-- Solicitação, resposta, aprovação ou recusa de orçamentos; link enviado por email; criação da OS somente após aprovação; reparo, entrega e pagamento.
-- Autenticação dos funcionários com **JWT** e recuperação de senha por email, confirmadas em 14/10/2026 e ainda pendentes de implementação.
+- CRUD de assistência, funcionário, cliente e aparelho; primeiro gerente criado com a assistência; funcionário convidado por email para criar o próprio acesso.
+- **Somente o cliente inicia o orçamento online**. O funcionário analisa e responde; o cliente aprova ou recusa. A OS é criada automaticamente após aprovação e acompanha reparo, entrega, pagamento manual ou cancelamento/desistência.
+- Cliente e funcionário entram com **JWT** e recuperam a senha por email. A primeira solicitação cria o cadastro do cliente e do aparelho; o email de confirmação orienta a criar a senha pela recuperação.
+- Emails de confirmação de solicitação e de criação da OS, além do email de resposta do orçamento e dos emails de acesso.
 - Isolamento dos dados entre assistências e preservação do histórico por desativação lógica.
 
-Estoque, fornecedores, solicitação e movimentação de peças, receitas, despesas, tipos financeiros e relatórios permanecem na visão futura. As histórias `US06` a `US09` e `US11`, as regras correspondentes e as classes desses módulos **não são critérios de conclusão** da demonstração. As metas de desempenho, disponibilidade e backup `RNF07` a `RNF09` são propostas para uma etapa de implantação posterior, não resultados já comprovados.
+O funcionário não cria orçamento ou OS em nome do cliente nesta versão. Os dois atendimentos presenciais, estoque, fornecedores, solicitação e movimentação de peças, receitas, despesas, tipos financeiros e relatórios permanecem na visão futura. As metas de desempenho, disponibilidade e backup `RNF07` a `RNF09` são propostas para implantação posterior, não resultados já comprovados.
+
+| Item | Demonstração local | Visão futura |
+| --- | --- | --- |
+| Histórias | `US01`, `US03` a `US05`, `US10`, `US12` a `US18` | `US02`, `US06` a `US09`, `US11` |
+| Regras de negócio | `RN01`, `RN02`, parte operacional de `RN03`, `RN04` a `RN06`, fluxo online de `RN07`, `RN08` a `RN13` | fluxos de loja de `RN07`, partes de estoque/financeiro/relatórios de `RN03`, `RN14` a `RN18` |
+| Requisitos não funcionais | `RNF01` a `RNF06` aplicados aos módulos locais, `RNF10`, regra de prazo de `RNF11` | `RNF07` a `RNF09` e ampliação dos demais para os módulos futuros |
+
+As classes da visão completa continuam no diagrama para orientar evolução; sua presença não obriga implementá-las no protótipo.
 
 O banco da demonstração permanece **PostgreSQL**. A interface troca JSON com a API Flask; Flask usa SQL para acessar o banco. Os conceitos dos slides orientam a implementação, que deve ser simples de explicar.
 
@@ -46,15 +55,15 @@ O banco da demonstração permanece **PostgreSQL**. A interface troca JSON com a
 ### Formas de solicitar o orçamento
 
 1. **Solicitação online pelo cliente:** o cliente solicita o orçamento; o funcionário analisa e responde; o cliente aprova ou recusa.
-2. **Atendimento na loja com aprovação imediata:** o funcionário prepara o orçamento e o cliente o aprova na hora. A OS é criada após a aprovação.
-3. **Atendimento na loja com análise posterior:** o funcionário cadastra o cliente, recebe o aparelho para análise, prepara o orçamento e o envia ao cliente. O cliente então aprova ou recusa.
+2. **Atendimento na loja com aprovação imediata (futuro):** o funcionário prepara o orçamento e o cliente o aprova na hora. A OS é criada após a aprovação.
+3. **Atendimento na loja com análise posterior (futuro):** o funcionário cadastra o cliente, recebe o aparelho para análise, prepara o orçamento e o envia ao cliente. O cliente então aprova ou recusa.
 
 ### Prazos e status do orçamento
 
 - `CriadoEm` registra a data em que o cliente solicitou o orçamento.
 - `RespondidoEm` registra a data em que o funcionário respondeu com o orçamento.
 - `PrazoParaAprovacaoCliente` é armazenado no banco de dados e corresponde a dois dias corridos para o cliente responder.
-- Se o cliente aprovar, o orçamento recebe status `Aprovado` e a OS é criada.
+- Se o cliente aprovar, o orçamento recebe status `Aprovado`, fica inativo e a OS é criada.
 - Se o cliente recusar, o orçamento recebe status `Recusado`, fica inativo e nenhuma OS é criada.
 - Se o cliente não responder até o prazo, o orçamento recebe status `Cancelado` e fica inativo.
 - O atributo `Ativo` do orçamento é booleano.
@@ -66,7 +75,7 @@ O banco da demonstração permanece **PostgreSQL**. A interface troca JSON com a
 - A OS tem um funcionário responsável pelo reparo; ele pode não ser o funcionário que respondeu ao orçamento.
 - Após a aprovação, se a assistência ainda não recebeu o aparelho, a OS pode ficar em `AguardandoAparelho`. Quando o aparelho é recebido, passa a `AguardandoReparo`.
 - Se o aparelho já estiver na assistência quando o orçamento for aprovado, a OS pode começar em `AguardandoReparo`.
-- Os status definidos para OS são: `AguardandoAparelho`, `AguardandoReparo`, `EmReparo`, `ReparoConcluido` e `Paga`.
+- Os status definidos para OS são: `AguardandoAparelho`, `AguardandoReparo`, `EmReparo`, `ReparoConcluido`, `Paga`, `Cancelada` e `Desistencia`. Os três últimos encerram o fluxo sem remoção física.
 - A previsão de conclusão da OS pode mudar conforme a data em que o cliente entrega o aparelho, especialmente em orçamentos online.
 - As datas da OS registram, em sequência, o recebimento do aparelho, a previsão de conclusão, a conclusão real do reparo e a entrega do aparelho ao cliente.
 
@@ -76,6 +85,7 @@ O banco da demonstração permanece **PostgreSQL**. A interface troca JSON com a
 - O registro de pagamento só é criado quando o cliente efetua o pagamento.
 - A OS recebe status `Paga` após o pagamento ser finalizado.
 - A classe `Pagamento` não tem atributo `Status`.
+- O funcionário informa a data efetiva do pagamento (o dia atual é sugerido); `RegistradoEm` registra quando ele fez o lançamento. Não há cobrança integrada.
 
 ## Peças, fornecedores e estoque
 
@@ -269,6 +279,8 @@ classDiagram
         EmReparo
         ReparoConcluido
         Paga
+        Cancelada
+        Desistencia
     }
 
     class StatusSolicitacaoPeca {
@@ -333,12 +345,17 @@ classDiagram
 
 ### US01 — Solicitar orçamento online
 
+**Escopo: demonstração local.**
+
 **Como** cliente, **quero** informar meus dados, os dados do aparelho e a descrição do problema ou serviço, **para** receber uma avaliação da assistência.
 
 - **Dado** que estou no formulário de solicitação online, **quando** informo os dados necessários do cliente, do aparelho e do problema e envio a solicitação, **então** o sistema registra um orçamento em análise, associado ao cliente e ao aparelho, com a data de criação.
 - **Dado** que já existe um cliente e um aparelho cadastrados na assistência, **quando** uma nova solicitação é registrada para esse aparelho, **então** o sistema permite associar novo orçamento ao mesmo aparelho sem apagar o histórico anterior.
+- **Dado** um email de cliente já cadastrado na assistência, **quando** ele tenta repetir o cadastro público, **então** o sistema não duplica o cliente e orienta o acesso pela recuperação de senha; depois de entrar, ele pode solicitar outro orçamento.
 
 ### US02 — Cadastrar cliente e aparelho no atendimento
+
+**Escopo: visão futura para abertura de orçamento pela equipe.** O CRUD de cliente e aparelho no painel pertence à demonstração local, mas não inicia orçamento ou OS.
 
 **Como** funcionário, **quero** cadastrar ou localizar o cliente e associar seu aparelho, **para** registrar um orçamento iniciado na loja.
 
@@ -347,12 +364,16 @@ classDiagram
 
 ### US03 — Analisar e responder orçamento
 
+**Escopo: demonstração local para orçamentos iniciados online.**
+
 **Como** funcionário, **quero** registrar o diagnóstico, os valores e o prazo de conclusão e responder ao orçamento, **para** que o cliente possa decidir sobre o reparo.
 
 - **Dado** um orçamento em análise, **quando** informo diagnóstico, mão de obra, peças e prazo de conclusão e envio a resposta, **então** o orçamento passa para `AguardandoAprovacao`, registra o funcionário responsável pela resposta e a data de resposta.
 - **Dado** que o orçamento foi respondido, **quando** o sistema calcula o prazo para resposta do cliente, **então** registra um prazo de dois dias corridos a partir da resposta.
 
 ### US04 — Aprovar ou recusar orçamento
+
+**Escopo: demonstração local.**
 
 **Como** cliente, **quero** aprovar ou recusar o orçamento recebido, **para** autorizar ou não a execução do serviço.
 
@@ -363,12 +384,15 @@ classDiagram
 
 ### US05 — Gerenciar recebimento e reparo da OS
 
+**Escopo: demonstração local para OS criada automaticamente após aprovação.**
+
 **Como** funcionário, **quero** acompanhar a OS e registrar o recebimento do aparelho e as etapas do reparo, **para** controlar a execução e a entrega do serviço.
 
 - **Dado** que uma OS foi criada e o aparelho ainda não foi recebido, **quando** a OS é iniciada, **então** ela pode permanecer em `AguardandoAparelho`; ao registrar o recebimento, passa para `AguardandoReparo` e registra a data de recebimento.
 - **Dado** que o aparelho já foi recebido quando o orçamento é aprovado, **quando** a OS é criada, **então** ela pode iniciar em `AguardandoReparo`.
 - **Dado** que a OS está em execução, **quando** o funcionário inicia e conclui o reparo e registra a entrega, **então** o sistema registra as datas correspondentes e permite as transições de status previstas para a OS.
 - **Dado** que o funcionário que respondeu ao orçamento não será o responsável pelo reparo, **quando** a OS é criada ou atribuída, **então** o sistema permite registrar outro funcionário como responsável.
+- **Dado** uma OS ainda não paga, **quando** a equipe registra cancelamento ou desistência, **então** a OS permanece no histórico em estado terminal e não aceita pagamento.
 
 ### US06 — Consultar estoque e utilizar peça em OS
 
@@ -404,9 +428,12 @@ classDiagram
 
 ### US10 — Registrar pagamento da OS
 
+**Escopo: demonstração local.** O sistema registra o pagamento informado pela equipe; não processa cobrança.
+
 **Como** funcionário, **quero** registrar o pagamento efetuado pelo cliente, **para** finalizar financeiramente a ordem de serviço.
 
 - **Dado** que o cliente efetuou o pagamento de uma OS, **quando** registro valor, data e forma de pagamento, **então** o sistema cria um registro de pagamento associado à OS e altera seu status para `Paga`.
+- **Dado** que a data do pagamento foi informada incorretamente, **quando** o funcionário a ajusta para uma data não futura antes de salvar, **então** o sistema guarda a data escolhida e, separadamente, a data do lançamento.
 - **Dado** que uma OS já possui pagamento, **quando** tento registrar outro pagamento para ela, **então** o sistema impede a criação de um segundo registro.
 - **Dado** que o pagamento ainda não foi efetuado, **quando** consulto a OS, **então** não existe registro de pagamento para ela.
 
@@ -418,23 +445,59 @@ classDiagram
 - **Dado** que sou funcionário sem perfil de gerente, **quando** solicito um relatório avançado, **então** o sistema nega o acesso.
 - **Dado** que sou gerente, **quando** solicito um relatório simples ou avançado, **então** o sistema permite a emissão com dados apenas da minha assistência.
 
-### US12 — Entrar como funcionário com JWT (demonstração local)
+### US12 — Entrar com JWT como funcionário ou cliente (demonstração local)
 
-**Como** funcionário, **quero** entrar com minhas credenciais e receber uma sessão JWT, **para** acessar somente os dados e ações permitidos na minha assistência.
+**Como** funcionário ou cliente, **quero** entrar com minhas credenciais e receber uma sessão JWT, **para** acessar somente meus dados e ações permitidos na minha assistência.
 
 - **Dado** um funcionário ativo com senha correta em uma assistência ativa, **quando** ele entra, **então** a API emite um JWT com prazo de validade definido.
 - **Dado** um JWT ausente, alterado ou expirado, **quando** uma rota protegida é acessada, **então** a API nega o acesso.
 - **Dado** um funcionário ou assistência desativado, **quando** o token é usado, **então** o acesso é negado mesmo que o prazo do JWT ainda não tenha terminado.
-- O comportamento do logout e da invalidação de tokens existentes após a troca de senha ainda precisa ser definido antes da implementação.
+- **Dado** um cliente ativo com senha correta, **quando** ele entra na assistência a que pertence, **então** vê apenas seus próprios orçamentos, aparelhos e OS.
+- O logout e a troca de senha incrementam a versão da sessão da conta; JWTs emitidos antes disso deixam de ser aceitos.
 
 ### US13 — Recuperar senha por email (demonstração local)
 
-**Como** funcionário, **quero** solicitar por email um link de recuperação, **para** definir uma nova senha quando perder o acesso.
+**Como** funcionário ou cliente, **quero** solicitar por email um código de recuperação, **para** definir uma nova senha quando perder o acesso ou criar meu primeiro acesso como cliente.
 
-- **Dado** um funcionário com email cadastrado, **quando** ele solicita recuperação, **então** o sistema envia um link individual ao endereço cadastrado sem revelar a senha anterior.
-- **Dado** um link válido, **quando** o funcionário define uma nova senha, **então** a senha anterior deixa de funcionar e o link não pode ser reutilizado.
-- **Dado** um link inválido ou vencido, **quando** ele tenta redefinir a senha, **então** a alteração é recusada.
-- O prazo do link, a forma de identificar a assistência e a proteção contra descoberta de contas precisam ser fechados antes da implementação.
+- **Dado** um email cadastrado, **quando** seu titular solicita recuperação, **então** o sistema envia um código individual ao endereço cadastrado sem revelar a senha anterior.
+- **Dado** um código válido, **quando** o titular define nova senha, **então** a senha anterior deixa de funcionar, o código não pode ser reutilizado e sessões anteriores deixam de funcionar.
+- **Dado** um código inválido ou vencido, **quando** alguém tenta redefinir a senha, **então** a alteração é recusada.
+- A tela de recuperação não recebe o email preenchido automaticamente pelo link do primeiro orçamento.
+
+### US14 — Aceitar convite de funcionário (demonstração local)
+
+**Como** funcionário convidado, **quero** completar meu cadastro e criar minha senha pelo link enviado ao email informado pelo gerente, **para** acessar a assistência.
+
+- **Dado** um convite ativo enviado pelo gerente, **quando** abro o link e informo meus dados e senha, **então** a conta passa a poder entrar na assistência com perfil de funcionário comum.
+- **Dado** um convite usado ou vencido, **quando** tento reutilizá-lo, **então** o sistema recusa a criação do acesso.
+
+### US15 — Receber confirmações por email (demonstração local)
+
+**Como** cliente, **quero** receber confirmação da solicitação e da criação da OS, **para** acompanhar o atendimento.
+
+- **Dado** que a primeira solicitação online foi registrada, **quando** o cadastro e orçamento são criados, **então** o cliente recebe email com os dados essenciais e indicação de como criar sua senha pela recuperação.
+- **Dado** que aprovo um orçamento, **quando** a OS é criada, **então** recebo email com o identificador e um caminho para consultar a OS.
+
+### US16 — Editar e desativar aparelhos (demonstração local)
+
+**Como** funcionário, **quero** corrigir os dados e desativar um aparelho sem apagar seu histórico, **para** manter o cadastro atualizado.
+
+- **Dado** um aparelho da minha assistência, **quando** altero seus dados, **então** a alteração é registrada sem mudar os orçamentos e OS vinculados.
+- **Dado** um aparelho desativado, **quando** consulto o histórico, **então** ele continua visível, mas não é oferecido para novas solicitações.
+
+### US17 — Acompanhar meus atendimentos (demonstração local)
+
+**Como** cliente autenticado, **quero** consultar meus aparelhos, orçamentos e OS e pedir novo orçamento, **para** acompanhar e continuar meus atendimentos sem duplicar o cadastro.
+
+- **Dado** que estou autenticado, **quando** consulto minha área, **então** vejo somente registros ligados ao meu cliente e assistência.
+- **Dado** um aparelho meu ativo, **quando** solicito novo orçamento, **então** o sistema cria outro orçamento ligado ao mesmo cliente e aparelho.
+
+### US18 — Corrigir orçamento e encerrar OS sem remoção física (demonstração local)
+
+**Como** funcionário, **quero** corrigir um orçamento antes da decisão do cliente e encerrar uma OS por cancelamento ou desistência, **para** manter dados corretos e histórico rastreável.
+
+- **Dado** um orçamento ainda não decidido nem vencido, **quando** corrijo a proposta, **então** o cliente recebe a versão atualizada e o prazo de resposta passa a contar dessa resposta.
+- **Dado** uma OS não paga, **quando** registro cancelamento ou desistência, **então** ela fica em estado terminal, permanece consultável e não pode receber pagamento.
 
 ## 5. Requisitos Não-Funcionais
 
@@ -442,7 +505,7 @@ classDiagram
 
 > As metas numéricas abaixo são propostas iniciais para tornar os requisitos verificáveis; devem ser confirmadas com os responsáveis pelo projeto antes da implantação.
 
-Para a **demonstração local**, `RNF07` a `RNF09` não compõem o critério de conclusão: não há medição de carga, disponibilidade mensal ou rotina operacional de backup que permita afirmar seu atendimento. `RNF11` ainda exige decisão sobre usar um fuso único ou um fuso configurável por assistência.
+Para a **demonstração local**, `RNF07` a `RNF09` não compõem o critério de conclusão: não há medição de carga, disponibilidade mensal ou rotina operacional de backup que permita afirmar seu atendimento. O prazo local é calculado como 48 horas a partir da resposta com `TIMESTAMPTZ`; a interface apresenta datas no fuso do navegador. Fuso próprio por assistência permanece para uma versão futura.
 
 - **RNF01 — Isolamento entre assistências:** Toda consulta ou alteração de clientes, funcionários, OS, receitas, despesas, fornecedores, peças e tipos deve restringir os resultados à assistência autenticada. A verificação deve comprovar que um usuário não consegue consultar nem alterar registros de outra assistência, inclusive manipulando identificadores enviados à aplicação.
 - **RNF02 — Controle de acesso por perfil:** O sistema deve validar permissões no servidor em cada operação. Funcionários podem consultar estoque, emitir relatórios simples, solicitar peças e registrar movimentações para OS. Somente gerentes podem emitir relatórios avançados, responder solicitações como gerente e cadastrar fornecedores, peças, receitas e despesas. Tentativas não autorizadas devem ser negadas e não podem alterar dados.
@@ -454,7 +517,7 @@ Para a **demonstração local**, `RNF07` a `RNF09` não compõem o critério de 
 - **RNF08 — Disponibilidade (meta proposta):** O sistema deve alcançar disponibilidade mensal de pelo menos 99,5%, desconsiderando janelas de manutenção previamente comunicadas. A disponibilidade deve ser apurada por monitoramento automático do serviço.
 - **RNF09 — Backup e recuperação (meta proposta):** Deve ser realizado backup automático pelo menos uma vez a cada 24 horas, com retenção mínima de 30 dias. Um teste trimestral de restauração deve demonstrar recuperação dos dados em até 8 horas e perda máxima de 24 horas de alterações.
 - **RNF10 — Compatibilidade e interface:** A área de solicitação online deve funcionar nas versões estáveis atuais dos navegadores Chrome, Edge, Firefox e Safari para computador e dispositivos móveis. Formulários devem apresentar rótulos associados aos campos, mensagens de erro junto ao campo correspondente e permitir operação por teclado.
-- **RNF11 — Datas e prazos:** Datas e horários devem ser armazenados de forma consistente e apresentados no fuso horário configurado para a assistência. O prazo de aprovação deve ser calculado como dois dias corridos a partir de `RespondidoEm`, sem substituição por dias úteis.
+- **RNF11 — Datas e prazos:** Na demonstração, timestamps usam `TIMESTAMPTZ`, prazo de aprovação de 48 horas a partir de `RespondidoEm`, e apresentação no fuso do navegador. A visão futura pode configurar fuso por assistência.
 
 ## 6. Regras de Negócio
 

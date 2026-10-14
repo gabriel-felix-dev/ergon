@@ -1,6 +1,6 @@
 # Alterações necessárias para a demonstração local do Ergon
 
-Atualizado em 14/10/2026. Este é o registro canônico das mudanças **pendentes** identificadas na revisão da documentação e do código. Nenhum item abaixo significa que a mudança já foi implementada. O histórico de entregas permanece em `VERSION.md`; ao concluir um item, registrar lá o resultado e a verificação realizada.
+Atualizado em 14/10/2026. Este é o registro canônico das mudanças identificadas na revisão da documentação e do código. Cada item distingue implementação de validação. O histórico de entregas permanece em `VERSION.md`.
 
 ## Decisões confirmadas pelo responsável
 
@@ -10,6 +10,7 @@ Atualizado em 14/10/2026. Este é o registro canônico das mudanças **pendentes
 - React e Flask trocam solicitações e respostas JSON por HTTP; o backend acessa o PostgreSQL com SQL. Para leitura, o método HTTP é `GET`; para atualização, o código usa `PUT`. `READ` é a operação do CRUD, não um método HTTP.
 - A demonstração deve incluir **sessões com JWT** e **recuperação de senha por email**, além do email com o link de orçamento. O responsável quer que senhas e outros dados sensíveis sejam protegidos por hash no banco. Senhas e tokens usados apenas para verificação podem ser armazenados como hash; ainda é necessário identificar quais outros campos sensíveis precisam ser lidos pelo sistema, pois hash não permite recuperar o valor original.
 - O código deve continuar simples de estudar e explicar na apresentação.
+- Somente o cliente inicia o orçamento na demonstração local. A equipe responde; aprovação do cliente cria a OS automaticamente. Abertura de orçamento ou OS pela equipe permanece para outra versão.
 
 ## Mudanças de implementação confirmadas
 
@@ -18,21 +19,21 @@ Atualizado em 14/10/2026. Este é o registro canônico das mudanças **pendentes
 - **Evidência:** `back-end/auth.py` gera um token aleatório, armazena seu SHA-256 em `SessaoAcesso` e consulta essa tabela a cada requisição. Isso é uma sessão com token opaco, não JWT. `front-end/src/App.jsx` guarda e envia esse token.
 - **Mudança:** definir um contrato JWT simples para login, autenticação e expiração, então adequar API, frontend e testes. Preservar as proteções já existentes contra acesso de funcionário ou assistência desativados e explicitar o comportamento do logout.
 - **Aceite:** o login emite um JWT verificável; acesso sem token, token alterado ou expirado é recusado; permissões e isolamento entre assistências continuam funcionando; o comportamento de logout está definido e testado.
-- **Estado:** pendente. O formato do token e a estratégia de invalidação ainda serão decididos antes da implementação.
+- **Estado:** implementado em código com JWT HS256 de 12 horas, verificação da conta a cada requisição e `VersaoSessao` para invalidar tokens ao sair ou trocar senha. Compilação Python passou; testes de integração com PostgreSQL ainda pendentes.
 
 ### ALT-02 — Implementar recuperação de senha por email
 
 - **Evidência:** `back-end/app.py` e `front-end/src/App.jsx` só oferecem cadastro e login. O Flask-Mail em `back-end/app.py` envia atualmente o link de orçamento, não um link de redefinição de senha.
-- **Mudança:** adicionar solicitação de recuperação, envio de email e redefinição da senha do funcionário. Definir antes o prazo e o uso único do link, o tratamento de contas inexistentes e o que acontece com sessões anteriores à troca da senha.
-- **Aceite:** em uma demonstração local com SMTP de teste, o funcionário solicita a recuperação, recebe o link, define nova senha, entra com ela e não consegue reutilizar o link.
-- **Estado:** pendente; funcionalidade exigida explicitamente pelo responsável.
+- **Mudança:** adicionar solicitação de recuperação, envio de código por email e redefinição da senha de funcionário ou cliente; código de 15 minutos e uso único.
+- **Aceite:** em uma demonstração local com SMTP de teste, o titular solicita a recuperação, recebe o código, define nova senha, entra com ela e não consegue reutilizar o código.
+- **Estado:** implementado em código para funcionário e cliente com código de seis dígitos por SMTP, validade de 15 minutos, cinco tentativas e uso único. Interface criada. Entrega SMTP real e teste integrado ainda pendentes.
 
 ### ALT-03 — Tratar falha no envio do orçamento
 
 - **Evidência:** `back-end/services.py::respond_budget` grava `AguardandoAprovacao` e o hash do link; só depois `back-end/app.py::respond_budget_route` tenta enviar o email. Se o envio falha, a API retorna erro após a mudança de estado. `RESUMO_DO_PROJETO.md` registra o problema.
 - **Mudança:** definir e implementar um resultado coerente para falha de SMTP, com mensagem clara à equipe e recuperação simples do envio. Não presumir rollback de uma transação já confirmada.
 - **Aceite:** uma falha simulada de SMTP deixa o orçamento em estado conhecido e a interface informa qual ação permite que o cliente receba um link válido; reenvio não cria OS nem duplica decisão.
-- **Estado:** pendente; a regra de negócio exata para a falha ainda precisa ser fechada.
+- **Estado:** envio agora ocorre dentro da transação de resposta, antes do commit; falha SMTP devolve erro e desfaz a resposta. Teste de falha com PostgreSQL e SMTP ainda pendente.
 
 ## Documentação a ajustar
 
@@ -48,7 +49,7 @@ Atualizado em 14/10/2026. Este é o registro canônico das mudanças **pendentes
 - **Evidência inicial:** `.specs/IDEIA.md` excluía estoque, fornecedores, receitas, despesas e relatórios da primeira versão, mas `.specs/regra-requisitos-classes/regra-requisitos-e-diagrama-de-classes-ergon.md` ainda descrevia esses módulos sem um recorte explícito. A recuperação de senha havia sido confirmada, mas não constava do escopo da versão.
 - **Mudança:** manter o documento amplo como visão do produto e identificar, nele ou por ponteiro claro, quais histórias e regras são da demonstração local e quais ficam para depois; atualizar o escopo da versão com recuperação de senha e JWT.
 - **Aceite:** não há dúvida sobre o que precisa funcionar na apresentação, sem apagar o levantamento completo já feito.
-- **Estado:** concluído na documentação em 14/10/2026, com recorte da demonstração, `US12` e `US13` no levantamento e atualização de `.specs/IDEIA.md`. JWT e recuperação de senha ainda não foram implementados.
+- **Estado:** documentação atualizada em 14/10/2026 com recorte online e `US12` a `US18`. Código JWT e recuperação escrito, aguardando teste integrado.
 
 ### ALT-06 — Consolidar o estado de validação em uma fonte
 
@@ -64,7 +65,7 @@ Atualizado em 14/10/2026. Este é o registro canônico das mudanças **pendentes
 - **Evidência:** `back-end/tests/system_smoke.py` cobre grande parte do fluxo, mas `RESUMO_DO_PROJETO.md` informa que a execução integral parou na resposta do primeiro orçamento por falta de configuração SMTP. Não há teste automatizado de navegador no repositório.
 - **Mudança:** executar o fluxo com banco de teste e capturador SMTP local: solicitação, resposta, email, aprovação ou recusa por link, criação única da OS, reparo, entrega e pagamento; incluir recuperação de senha e casos de falha relevantes. Para a interface web, adicionar ao menos uma jornada de navegador executável quando a implementação estiver pronta.
 - **Aceite:** resultados reproduzíveis registrados para API e navegador, com limpeza dos dados de teste.
-- **Estado:** pendente; não executar o smoke em dados de produção.
+- **Estado:** pendente; compilação Python e build React passaram. O `system_smoke.py` existente usa contratos da versão anterior e precisa ser atualizado antes de executar em banco de teste. Não executar em dados de produção.
 
 ### ALT-08 — Conferir a separação MVC sem refatoração desnecessária
 
@@ -78,14 +79,14 @@ Atualizado em 14/10/2026. Este é o registro canônico das mudanças **pendentes
 - **Evidência:** o requisito `RNF11` em `.specs/regra-requisitos-classes/regra-requisitos-e-diagrama-de-classes-ergon.md` fala em fuso configurado por assistência, mas `data-base/script/script-ergon.sql` não possui configuração de fuso na tabela `AssistenciaTecnica`. Os dois dias do orçamento são calculados em `back-end/services.py` com timestamp do banco.
 - **Mudança:** decidir se a demonstração usa um fuso único explicitamente documentado ou se o fuso por assistência realmente integra a primeira versão; só então alinhar requisito, interface e dados.
 - **Aceite:** o prazo de aprovação e a apresentação de datas seguem uma regra única e testável.
-- **Estado:** decisão pendente.
+- **Estado:** recorte local definido em 14/10/2026: prazo de 48 horas calculado pelo PostgreSQL com `TIMESTAMPTZ`, interface no fuso do navegador; fuso por assistência futuro. Falta testar mudança de fuso na integração.
 
 ### ALT-10 — Ajustar instruções de execução à demonstração
 
 - **Evidência:** `README.md` mistura a execução local com detalhes de publicação em Cloudflare. `.specs/regra-tecnologias/regras-de-tecnoligias.md` apresenta Cloudflare como plataforma indicada, embora a meta atual seja uma demonstração local.
 - **Mudança:** destacar o caminho mínimo reproduzível para React, Flask, PostgreSQL e SMTP de teste; manter a implantação como possibilidade futura, identificada como fora do critério de conclusão atual.
 - **Aceite:** outra pessoa consegue preparar e apresentar a jornada crítica localmente seguindo o README sem precisar publicar serviços.
-- **Estado:** parcialmente concluído na documentação em 14/10/2026: as regras tecnológicas identificam Cloudflare como futuro; o README local ainda precisa ser revisado.
+- **Estado:** README revisado em 14/10/2026 para execução local e migração. Reprodução por outra pessoa ainda pendente.
 
 ### ALT-11 — Tornar condicionais os padrões de objetos SQL
 
@@ -106,7 +107,28 @@ Atualizado em 14/10/2026. Este é o registro canônico das mudanças **pendentes
 - **Evidência:** o responsável confirmou a exigência de proteger senhas e outros dados sensíveis no banco por hash. O sistema precisa recuperar alguns dados, como o email do cliente para enviar o orçamento e o email do funcionário para recuperar a senha; um hash isolado não permite esse uso.
 - **Mudança:** listar os campos considerados sensíveis além de senhas e tokens. Para cada campo, decidir se o sistema só precisa verificar igualdade ou se precisa ler o valor. Usar hash para os valores de verificação; definir outra proteção apropriada para valores recuperáveis, sem prometer que um hash possa ser revertido.
 - **Aceite:** cada campo sensível da demonstração tem finalidade e forma de proteção explícitas, compatíveis com os fluxos de email e consulta.
-- **Estado:** classificação pendente com o responsável; nenhuma alteração de esquema foi feita.
+- **Estado:** senhas, tokens de convite e códigos de recuperação implementados como hash; emails legíveis para login e SMTP. Demais campos sensíveis ainda precisam ser classificados com o responsável.
+
+### ALT-14 — Completar e validar o fluxo exclusivo do cliente
+
+- **Evidência:** a decisão final do escopo em 14/10/2026 retirou a abertura de orçamento e OS pela equipe da demonstração. O frontend anterior ainda exibia orçamento na loja.
+- **Mudança:** manter a solicitação pública e a solicitação do cliente autenticado; esconder o atendimento na loja no painel; criar OS somente após aprovação pelo link; permitir cancelamento/desistência e pagamento manual.
+- **Aceite:** jornada completa no navegador e na API com banco de teste e email capturado, sem criação manual de OS.
+- **Estado:** código e interface alterados; build React passou. Jornada integrada ainda pendente.
+
+### ALT-15 — Preparar banco de teste e SMTP para a apresentação
+
+- **Evidência:** este computador não possui `DATABASE_URL`, `MAIL_SERVER`, serviço PostgreSQL local, Docker ou WSL configurados.
+- **Mudança:** disponibilizar um banco descartável, executar o esquema ou a migração em cópia, configurar SMTP e testar entrega aos emails que serão usados na apresentação.
+- **Aceite:** smoke completo e roteiro visual executam sem edição de código nem uso do banco de produção.
+- **Estado:** capturador SMTP local recebeu uma mensagem de teste em 14/10/2026. PostgreSQL e conta SMTP real ainda não estão configurados; entrega externa não foi comprovada.
+
+### ALT-16 — Inicializar Flask-Mail antes de construir a mensagem
+
+- **Evidência:** o teste SMTP isolado falhou com `KeyError: 'mail'` porque `Message` foi construído antes de `Mail(app)`.
+- **Mudança:** inicializar a extensão após configurar o SMTP e só então construir e enviar `Message`.
+- **Aceite:** mensagem recebida pelo capturador SMTP local.
+- **Estado:** corrigido e verificado em 14/10/2026 com mensagem capturada em `back-end/.test-mail/messages.jsonl`.
 
 ## Como manter esta lista
 

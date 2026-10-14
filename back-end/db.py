@@ -38,13 +38,14 @@ def _connect():
     parts = urlparse(_database_url())
     if parts.scheme not in ("postgres", "postgresql") or not parts.hostname:
         raise RuntimeError("DATABASE_URL deve ser uma URL PostgreSQL válida")
+    local = parts.hostname in ("localhost", "127.0.0.1", "::1")
     return pg8000.dbapi.connect(
         user=unquote(parts.username or ""),
         password=unquote(parts.password or ""),
         host=parts.hostname,
         port=parts.port or 5432,
         database=unquote(parts.path.lstrip("/") or "postgres"),
-        ssl_context=_ssl_context(parts.hostname),
+        ssl_context=False if local else _ssl_context(parts.hostname),
         timeout=10,
     )
 

@@ -45,10 +45,12 @@ function Card({ title, children, className = '' }) {
 }
 
 function App() {
-  const accessToken = new URLSearchParams(window.location.search).get('orcamento')
+  const params = new URLSearchParams(window.location.search)
+  const accessToken = params.get('orcamento')
+  const inviteToken = params.get('convite')
   const [session, setSession] = useState(readSession)
   const [assistances, setAssistances] = useState([])
-  const [view, setView] = useState('inicio')
+  const [view, setView] = useState(params.has('recuperar') ? 'recuperar' : params.has('entrar') ? 'login' : 'inicio')
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [publicForm, setPublicForm] = useState({})
@@ -58,6 +60,10 @@ function App() {
   const [newManager, setNewManager] = useState({})
   const [proposal, setProposal] = useState(null)
   const [dashboard, setDashboard] = useState(null)
+  const [invitation, setInvitation] = useState(null)
+  const [inviteAccepted, setInviteAccepted] = useState(false)
+  const [inviteForm, setInviteForm] = useState({})
+  const [recoveryForm, setRecoveryForm] = useState({ tipo: 'cliente' })
   const [tab, setTab] = useState('orcamentos')
 
   const run = async (fn, success) => {
@@ -86,6 +92,15 @@ function App() {
     const bearer = { token: activeSession.token }
     const id = activeSession.usuario.assistenciaId
     try {
+      if (activeSession.usuario.tipo === 'cliente') {
+        const [budgets, orders, devices] = await Promise.all([
+          api('/clientes/me/orcamentos', bearer),
+          api('/clientes/me/ordens-servico', bearer),
+          api('/clientes/me/aparelhos', bearer),
+        ])
+        setDashboard({ budgets, orders, devices })
+        return
+      }
       const [assistance, clients, budgets, orders, employees] = await Promise.all([
         api(`/assistencias/${id}`, bearer),
         api('/clientes', bearer),
@@ -99,12 +114,15 @@ function App() {
 
   useEffect(() => {
     if (accessToken) loadProposal()
-    else { loadAssistances(); if (session) loadDashboard(session) }
+    else if (inviteToken) {
+      api(`/funcionarios/convites/${encodeURIComponent(inviteToken)}`)
+        .then(setInvitation).catch(cause => setError(cause.message))
+    } else { loadAssistances(); if (session) loadDashboard(session) }
   }, [])
 
   const login = async e => {
     e.preventDefault()
-    const result = await run(() => api('/login', { method: 'POST', data: {
+    const result = await run(() => api(loginForm.tipo === 'cliente' ? '/clientes/login' : '/login', { method: 'POST', data: {
       assistenciaId: Number(loginForm.assistenciaId), email: loginForm.email, senha: loginForm.senha,
     } }))
     if (result) {
@@ -129,7 +147,7 @@ function App() {
     e.preventDefault()
     const result = await run(() => api(`/assistencias/${assistanceId}/solicitacoes`, {
       method: 'POST', data: publicForm,
-    }), 'Solicitação enviada. A assistência enviará a proposta por email.')
+    }), 'Solicitação registrada. Confira seu email para criar o acesso; a assistência enviará a proposta depois.')
     if (result) setPublicForm({})
   }
 
@@ -144,6 +162,37 @@ function App() {
     await run(() => api('/logout', { method: 'POST', token: session.token }))
     sessionStorage.removeItem('ergon-session')
     setSession(null); setDashboard(null); setView('inicio')
+  }
+
+  const requestRecovery = async e => {
+    e.preventDefault()
+    await run(() => api('/senhas/recuperacao', { method: 'POST', data: {
+      assistenciaId: Number(recoveryForm.assistenciaId), email: recoveryForm.email,
+      tipo: recoveryForm.tipo,
+    } }), 'Se o email estiver cadastrado, você receberá um código.')
+  }
+
+  const resetPassword = async e => {
+    e.preventDefault()
+    const result = await run(() => api('/senhas/redefinicao', { method: 'POST', data: {
+      assistenciaId: Number(recoveryForm.assistenciaId), email: recoveryForm.email,
+      tipo: recoveryForm.tipo, codigo: recoveryForm.codigo, senha: recoveryForm.senha,
+    } }), 'Senha definida. Agora você pode entrar.')
+    if (result) setView('login')
+  }
+
+  const acceptInvite = async e => {
+    e.preventDefault()
+    const result = await run(() => api(`/funcionarios/convites/${encodeURIComponent(inviteToken)}`, {
+      method: 'POST', data: inviteForm,
+    }), 'Cadastro concluído. Entre com seu email e senha.')
+    if (result) {
+      window.history.replaceState({}, '', window.location.pathname)
+      await loadAssistances()
+      setLoginForm({ assistenciaId: result.IdAssistenciaTecnica, email: result.Email, tipo: 'funcionario' })
+      setInviteAccepted(true)
+      setView('login')
+    }
   }
 
   const act = async (path, method, data, success) => {
@@ -178,16 +227,32 @@ function App() {
     </Card>}
   </main>
 
+  if (inviteToken && !inviteAccepted) return <main className="shell narrow">
+    <header className="brand"><span className="mark">E</span><span>ergon</span></header>
+    {error && <p className="alert error">{error}</p>}{notice && <p className="alert">{notice}</p>}
+    <Card title="Aceitar convite">
+      {!invitation ? <p>Carregando convite…</p> : <>
+        <p>Você foi convidado por {invitation.Assistencia}. Email: {invitation.Email}</p>
+        <form onSubmit={acceptInvite}>
+          <Inputs schema={[[ 'nome', 'Nome', 'text', true ], [ 'documento', 'Documento', 'text', true ],
+            [ 'telefone', 'Telefone', 'tel' ], [ 'senha', 'Senha (mínimo 10 caracteres)', 'password', true ]]}
+            values={inviteForm} setValues={setInviteForm} />
+          <button>Concluir cadastro</button>
+        </form>
+      </>}
+    </Card>
+  </main>
+
   return <main className="shell">
     <header className="topbar">
       <div className="brand"><span className="mark">E</span><span>ergon</span></div>
       <nav>
         <button className="nav" onClick={() => { setView('inicio'); setError('') }}>Solicitar orçamento</button>
         {session ? <><button className="nav" onClick={() => setView('painel')}>Painel</button><button className="nav" onClick={logout}>Sair</button></>
-          : <><button className="nav" onClick={() => setView('login')}>Entrar</button><button className="nav" onClick={() => setView('cadastro')}>Criar assistência</button></>}
+          : <><button className="nav" onClick={() => setView('login')}>Entrar</button><button className="nav" onClick={() => setView('recuperar')}>Recuperar senha</button><button className="nav" onClick={() => setView('cadastro')}>Criar assistência</button></>}
       </nav>
     </header>
-    {error && <p className="alert error">{error}</p>}{notice && <p className="alert">{notice}</p>}
+    {error && <p className="alert error">{error} {error.includes('já está cadastrado') && <button className="textbutton" onClick={() => { setView('recuperar'); setError('') }}>Clique aqui para recuperar a senha</button>}</p>}{notice && <p className="alert">{notice}</p>}
     {view === 'inicio' && <div className="landing">
       <div className="hero"><div className="eyebrow">ASSISTÊNCIA TÉCNICA SEM COMPLICAÇÃO</div>
         <h1>Seu aparelho em boas mãos.</h1>
@@ -204,14 +269,36 @@ function App() {
         </form>
       </Card>
     </div>}
-    {view === 'login' && <Card title="Acesso da equipe" className="auth">
-      <p className="muted">Use os dados cadastrados pelo gerente da assistência.</p>
+    {view === 'login' && <Card title="Entrar" className="auth">
       <form onSubmit={login}>
+        <label>Tipo de acesso<select value={loginForm.tipo || 'funcionario'} onChange={e => setLoginForm({ ...loginForm, tipo: e.target.value })}>
+          <option value="funcionario">Equipe</option><option value="cliente">Cliente</option>
+        </select></label>
         <label>Assistência<select required value={loginForm.assistenciaId ?? ''} onChange={e => setLoginForm({ ...loginForm, assistenciaId: e.target.value })}>
           <option value="">Selecione</option>{assistances.map(a => <option key={a.Id} value={a.Id}>{a.Nome}</option>)}
         </select></label>
         <Inputs schema={[[ 'email', 'Email', 'email', true ], [ 'senha', 'Senha', 'password', true ]]} values={loginForm} setValues={setLoginForm} />
         <button>Entrar</button>
+      </form>
+      <button className="textbutton" onClick={() => setView('recuperar')}>Esqueci minha senha</button>
+    </Card>}
+    {view === 'recuperar' && <Card title="Recuperar senha" className="auth">
+      <p className="muted">Peça um código por email e defina sua senha.</p>
+      <form onSubmit={requestRecovery}>
+        <label>Tipo de acesso<select value={recoveryForm.tipo} onChange={e => setRecoveryForm({ ...recoveryForm, tipo: e.target.value })}>
+          <option value="cliente">Cliente</option><option value="funcionario">Equipe</option>
+        </select></label>
+        <label>Assistência<select required value={recoveryForm.assistenciaId || ''} onChange={e => setRecoveryForm({ ...recoveryForm, assistenciaId: e.target.value })}>
+          <option value="">Selecione</option>{assistances.map(a => <option key={a.Id} value={a.Id}>{a.Nome}</option>)}
+        </select></label>
+        <Inputs schema={[[ 'email', 'Email', 'email', true ]]} values={recoveryForm} setValues={setRecoveryForm} />
+        <button>Pedir código</button>
+      </form>
+      <form onSubmit={resetPassword}>
+        <Inputs schema={[[ 'codigo', 'Código de seis dígitos', 'text', true ],
+          [ 'senha', 'Nova senha (mínimo 10 caracteres)', 'password', true ]]}
+          values={recoveryForm} setValues={setRecoveryForm} />
+        <button>Definir senha</button>
       </form>
     </Card>}
     {view === 'cadastro' && <Card title="Cadastrar assistência" className="auth wide">
@@ -221,13 +308,15 @@ function App() {
         <button>Criar assistência</button>
       </form>
     </Card>}
-    {view === 'painel' && session && dashboard && <div className="workspace">
+    {view === 'painel' && session?.usuario.tipo === 'cliente' && dashboard &&
+      <ClientDashboard data={dashboard} session={session} reload={() => loadDashboard()} run={run} />}
+    {view === 'painel' && session && session.usuario.tipo !== 'cliente' && dashboard && <div className="workspace">
       <div className="workspace-head"><div><div className="eyebrow">PAINEL DA EQUIPE</div><h1>{dashboard.assistance.Nome}</h1>
         <p>Olá, {session.usuario.nome}. Gerencie atendimentos, clientes e ordens de serviço.</p></div>
         <button className="secondary" onClick={() => loadDashboard()}>Atualizar</button></div>
       <div className="stats"><div><strong>{dashboard.budgets.filter(b => b.Status === 'EmAnalise').length}</strong><span>Em análise</span></div>
         <div><strong>{dashboard.budgets.filter(b => b.Status === 'AguardandoAprovacao').length}</strong><span>Aguardando cliente</span></div>
-        <div><strong>{dashboard.orders.filter(o => o.Status !== 'Paga').length}</strong><span>OS em andamento</span></div></div>
+        <div><strong>{dashboard.orders.filter(o => !['Paga', 'Cancelada', 'Desistencia'].includes(o.Status)).length}</strong><span>OS em andamento</span></div></div>
       <div className="tabs">{[
         ['orcamentos', 'Orçamentos'], ['ordens', 'Ordens de serviço'], ['clientes', 'Clientes'],
         ...(session.usuario.gerente ? [['funcionarios', 'Funcionários'], ['assistencia', 'Assistência']] : []),
@@ -241,11 +330,63 @@ function App() {
   </main>
 }
 
+function ClientDashboard({ data, session, reload, run }) {
+  const [form, setForm] = useState({})
+  const [existing, setExisting] = useState(false)
+  const submit = async e => {
+    e.preventDefault()
+    const payload = existing
+      ? { aparelhoId: Number(form.aparelhoId), defeito: form.defeito }
+      : { marca: form.marca, modelo: form.modelo, defeito: form.defeito }
+    const result = await run(() => api('/clientes/me/solicitacoes', {
+      method: 'POST', token: session.token, data: payload,
+    }), 'Solicitação registrada. Confira seu email.')
+    if (result) { setForm({}); await reload() }
+  }
+  return <div className="workspace">
+    <div className="workspace-head"><div><div className="eyebrow">ÁREA DO CLIENTE</div>
+      <h1>Olá, {session.usuario.nome}</h1><p>Acompanhe seus orçamentos e ordens de serviço.</p></div>
+      <button className="secondary" onClick={reload}>Atualizar</button></div>
+    <div className="grid two"><Card title="Nova solicitação">
+      <form onSubmit={submit}>
+        {data.devices.some(d => d.Ativo) && <label className="check">
+          <input type="checkbox" checked={existing} onChange={e => setExisting(e.target.checked)} />
+          Usar aparelho já cadastrado</label>}
+        {existing
+          ? <label>Aparelho<select required value={form.aparelhoId || ''} onChange={e => setForm({ ...form, aparelhoId: e.target.value })}>
+            <option value="">Selecione</option>{data.devices.filter(d => d.Ativo).map(d =>
+              <option key={d.Id} value={d.Id}>{d.Marca} {d.Modelo}</option>)}
+          </select></label>
+          : <Inputs schema={[[ 'marca', 'Marca', 'text', true ], [ 'modelo', 'Modelo', 'text', true ]]}
+              values={form} setValues={setForm} />}
+        <Inputs schema={[[ 'defeito', 'Defeito relatado', 'textarea', true ]]} values={form} setValues={setForm} />
+        <button>Enviar solicitação</button>
+      </form>
+    </Card><Card title="Meus aparelhos">
+      {data.devices.length ? data.devices.map(d => <p key={d.Id}>
+        #{d.Id} · {d.Marca} {d.Modelo} · {d.Ativo ? 'Ativo' : 'Inativo'}</p>)
+        : <p className="muted">Nenhum aparelho.</p>}
+    </Card></div>
+    <div className="grid two"><Card title="Meus orçamentos">
+      {data.budgets.length ? data.budgets.map(b => <div className="budget" key={b.Id}>
+        <strong>#{b.Id} · {b.MarcaAparelho} {b.ModeloAparelho}</strong>
+        <p>{b.DescricaoProblemaCliente}</p><span className="pill">{statusLabel(b.Status)}</span>
+      </div>) : <p className="muted">Nenhum orçamento.</p>}
+    </Card><Card title="Minhas ordens de serviço">
+      {data.orders.length ? data.orders.map(o => <div className="budget" key={o.Id}>
+        <strong>OS #{o.Id} · {o.MarcaAparelho} {o.ModeloAparelho}</strong>
+        <p>Orçamento #{o.IdOrcamento}</p><span className="pill">{statusLabel(o.Status)}</span>
+      </div>) : <p className="muted">Nenhuma OS.</p>}
+    </Card></div>
+  </div>
+}
+
 function Clients({ data, act }) {
   const [form, setForm] = useState({})
   const [editing, setEditing] = useState(null)
   const [deviceClient, setDeviceClient] = useState(null)
   const [deviceForm, setDeviceForm] = useState({})
+  const [editingDevice, setEditingDevice] = useState(null)
   const [devices, setDevices] = useState([])
   const [clientOrders, setClientOrders] = useState([])
   const save = async e => {
@@ -275,12 +416,26 @@ function Clients({ data, act }) {
       {c.Ativo && <button className="textbutton danger" onClick={() => { if (window.confirm('Desativar este cliente?')) act(`/clientes/${c.Id}`, 'DELETE', undefined, 'Cliente desativado.') }}>Desativar</button>}</div>
   </div>)}</div></Card>
     {deviceClient && <Card title={`Aparelhos e OS · ${deviceClient.Nome}`} className="full">
-      <h3>Novo aparelho</h3><form className="inline-form" onSubmit={async e => {
+       <h3>{editingDevice ? 'Editar aparelho' : 'Novo aparelho'}</h3><form className="inline-form" onSubmit={async e => {
         e.preventDefault()
-        const result = await act(`/clientes/${deviceClient.Id}/aparelhos`, 'POST', deviceForm, 'Aparelho cadastrado.')
-        if (result) { setDeviceForm({}); selectClient(deviceClient) }
-      }}><Inputs schema={[[ 'marca', 'Marca', 'text', true ], [ 'modelo', 'Modelo', 'text', true ], [ 'tipoAparelho', 'Tipo' ]]} values={deviceForm} setValues={setDeviceForm} /><button>Adicionar</button></form>
-      <h3>Aparelhos</h3>{devices.length ? devices.map(d => <p key={d.Id}>#{d.Id} · {d.Marca} {d.Modelo}</p>) : <p className="muted">Nenhum aparelho.</p>}
+         const result = await act(`/clientes/${deviceClient.Id}/aparelhos${editingDevice ? `/${editingDevice}` : ''}`,
+           editingDevice ? 'PUT' : 'POST', deviceForm, editingDevice ? 'Aparelho atualizado.' : 'Aparelho cadastrado.')
+         if (result) { setDeviceForm({}); setEditingDevice(null); selectClient(deviceClient) }
+       }}><Inputs schema={[[ 'marca', 'Marca', 'text', true ], [ 'modelo', 'Modelo', 'text', true ], [ 'tipoAparelho', 'Tipo' ]]} values={deviceForm} setValues={setDeviceForm} />
+         <button>{editingDevice ? 'Salvar' : 'Adicionar'}</button>
+         {editingDevice && <button type="button" className="secondary" onClick={() => { setEditingDevice(null); setDeviceForm({}) }}>Cancelar</button>}
+       </form>
+       <h3>Aparelhos</h3>{devices.length ? devices.map(d => <div className="row" key={d.Id}>
+         <div>#{d.Id} · {d.Marca} {d.Modelo} · {d.Ativo ? 'Ativo' : 'Inativo'}</div>
+         <div className="row-actions"><button className="textbutton" onClick={() => {
+           setEditingDevice(d.Id); setDeviceForm({ marca: d.Marca, modelo: d.Modelo, tipoAparelho: d.TipoAparelho || '' })
+         }}>Editar</button>{d.Ativo && <button className="textbutton danger" onClick={async () => {
+           if (window.confirm('Desativar este aparelho?')) {
+             await act(`/clientes/${deviceClient.Id}/aparelhos/${d.Id}`, 'DELETE', undefined, 'Aparelho desativado.')
+             selectClient(deviceClient)
+           }
+         }}>Desativar</button>}</div>
+       </div>) : <p className="muted">Nenhum aparelho.</p>}
       <h3>Ordens de serviço deste cliente</h3>{clientOrders.length ? clientOrders.map(o => <p key={o.Id}>OS #{o.Id} · {o.MarcaAparelho} {o.ModeloAparelho} · {statusLabel(o.Status)}</p>) : <p className="muted">Nenhuma OS.</p>}
     </Card>}
   </div>
@@ -292,19 +447,19 @@ function Employees({ data, act }) {
   const save = async e => {
     e.preventDefault()
     const result = await act(editing ? `/funcionarios/${editing}` : '/funcionarios',
-      editing ? 'PUT' : 'POST', { ...form, gerente: !!form.gerente, ativo: form.ativo !== false },
-      editing ? 'Funcionário atualizado.' : 'Funcionário cadastrado.')
+      editing ? 'PUT' : 'POST',
+      editing ? { ...form, gerente: !!form.gerente, ativo: form.ativo !== false } : { email: form.email },
+      editing ? 'Funcionário atualizado.' : 'Convite enviado por email.')
     if (result) { setForm({}); setEditing(null) }
   }
-  return <div className="grid two"><Card title={editing ? 'Editar funcionário' : 'Novo funcionário'}>
-    <form onSubmit={save}><Inputs schema={fields.funcionario} values={form} setValues={setForm} />
-      {!editing && <Inputs schema={[[ 'senha', 'Senha (mínimo 10 caracteres)', 'password', true ]]} values={form} setValues={setForm} />}
-      <label className="check"><input type="checkbox" checked={!!form.gerente} onChange={e => setForm({ ...form, gerente: e.target.checked })} /> Gerente</label>
+  return <div className="grid two"><Card title={editing ? 'Editar funcionário' : 'Convidar funcionário'}>
+    <form onSubmit={save}><Inputs schema={editing ? fields.funcionario : [[ 'email', 'Email', 'email', true ]]} values={form} setValues={setForm} />
+      {editing && <label className="check"><input type="checkbox" checked={!!form.gerente} onChange={e => setForm({ ...form, gerente: e.target.checked })} /> Gerente</label>}
       {editing && <label className="check"><input type="checkbox" checked={form.ativo !== false} onChange={e => setForm({ ...form, ativo: e.target.checked })} /> Ativo</label>}
       <div className="actions"><button>Salvar</button>{editing && <button type="button" className="secondary" onClick={() => { setEditing(null); setForm({}) }}>Cancelar</button>}</div>
     </form></Card><Card title="Equipe"><div className="list">{data.employees.map(f => <div className="row" key={f.Id}>
-      <div><strong>{f.Nome}</strong><small>{f.Email} · {f.Gerente ? 'Gerente' : 'Funcionário'} · {f.Ativo ? 'Ativo' : 'Inativo'}</small></div>
-      <div className="row-actions"><button className="textbutton" onClick={() => { setEditing(f.Id); setForm({ nome: f.Nome, documento: f.Documento, email: f.Email, telefone: f.Telefone || '', gerente: f.Gerente, ativo: f.Ativo }) }}>Editar</button>
+      <div><strong>{f.Nome || 'Convite pendente'}</strong><small>{f.Email} · {f.Gerente ? 'Gerente' : 'Funcionário'} · {f.Ativo ? 'Ativo' : 'Inativo'}</small></div>
+      <div className="row-actions"><button className="textbutton" onClick={() => { setEditing(f.Id); setForm({ nome: f.Nome || '', documento: f.Documento || '', email: f.Email, telefone: f.Telefone || '', gerente: f.Gerente, ativo: f.Ativo }) }}>Editar</button>
         {f.Ativo && <button className="textbutton danger" onClick={() => { if (window.confirm('Desativar este funcionário?')) act(`/funcionarios/${f.Id}`, 'DELETE', undefined, 'Funcionário desativado.') }}>Desativar</button>}</div>
     </div>)}</div></Card></div>
 }
@@ -323,60 +478,38 @@ function Assistance({ data, act, logout }) {
 }
 
 function Budgets({ data, act }) {
-  const [newForm, setNewForm] = useState({ origem: 'LojaImediata' })
-  const [devices, setDevices] = useState([])
   const [responses, setResponses] = useState({})
-  const [decisions, setDecisions] = useState({})
-  const selectClient = async value => {
-    setNewForm({ ...newForm, clienteId: value, aparelhoId: '' })
-    if (!value) { setDevices([]); return }
-    try { setDevices(await api(`/clientes/${value}/aparelhos`, { token: readSession()?.token })) }
-    catch { setDevices([]) }
-  }
-  return <div className="grid two"><Card title="Orçamento na loja">
-    <form onSubmit={async e => {
-      e.preventDefault()
-      const result = await act('/orcamentos', 'POST', { ...newForm, clienteId: Number(newForm.clienteId),
-        aparelhoId: Number(newForm.aparelhoId) }, 'Orçamento criado.')
-      if (result) setNewForm({ origem: 'LojaImediata' })
-    }}>
-      <label>Cliente<select required value={newForm.clienteId || ''} onChange={e => selectClient(e.target.value)}>
-        <option value="">Selecione</option>{data.clients.filter(c => c.Ativo).map(c => <option key={c.Id} value={c.Id}>{c.Nome}</option>)}
-      </select></label>
-      <label>Aparelho<select required value={newForm.aparelhoId || ''} onChange={e => setNewForm({ ...newForm, aparelhoId: e.target.value })}>
-        <option value="">Selecione</option>{devices.map(d => <option key={d.Id} value={d.Id}>{d.Marca} {d.Modelo}</option>)}
-      </select></label>
-      <label>Tipo de atendimento<select value={newForm.origem} onChange={e => setNewForm({ ...newForm, origem: e.target.value })}>
-        <option value="LojaImediata">Aprovação no atendimento</option><option value="LojaPosterior">Análise posterior por email</option>
-      </select></label>
-      <Inputs schema={[[ 'descricaoProblemaCliente', 'Defeito relatado', 'textarea', true ]]} values={newForm} setValues={setNewForm} />
-      <button>Criar orçamento</button>
-    </form></Card><Card title="Orçamentos" className="budget-list">{data.budgets.length ? data.budgets.map(b => <div className="budget" key={b.Id}>
+  return <Card title="Orçamentos" className="budget-list">{data.budgets.length ? data.budgets.map(b => <div className="budget" key={b.Id}>
       <div className="budget-head"><div><strong>#{b.Id} · {b.NomeCliente}</strong><small>{b.MarcaAparelho} {b.ModeloAparelho} · {originLabel(b.Origem)}</small></div><span className="pill">{statusLabel(b.Status)}</span></div>
       <p>{b.DescricaoProblemaCliente}</p>
-      {b.Status === 'EmAnalise' && <form onSubmit={e => {
+      {(b.Status === 'EmAnalise' || b.Status === 'AguardandoAprovacao') && <form onSubmit={e => {
         e.preventDefault()
-        act(`/orcamentos/${b.Id}/resposta`, 'PUT', responses[b.Id], 'Resposta salva. Link enviado quando necessário.')
+        act(`/orcamentos/${b.Id}/resposta`, 'PUT', responses[b.Id] || {
+          descricaoProblemaCliente: b.DescricaoProblemaCliente,
+          diagnosticoFuncionario: b.DiagnosticoFuncionario,
+          valorMaoDeObra: b.ValorMaoDeObra,
+          valorPecas: b.ValorPecas,
+          prazoConclusao: b.PrazoConclusao,
+        }, 'Resposta salva e enviada ao cliente.')
       }}><Inputs schema={[
+        ['descricaoProblemaCliente', 'Defeito relatado', 'textarea', true],
         ['diagnosticoFuncionario', 'Diagnóstico', 'textarea', true],
         ['valorMaoDeObra', 'Mão de obra (R$)', 'number', true],
         ['valorPecas', 'Peças (R$)', 'number', true],
         ['prazoConclusao', 'Previsão de conclusão', 'date', true],
-      ]} values={responses[b.Id] || {}} setValues={v => setResponses({ ...responses, [b.Id]: v })} /><button>Responder orçamento</button></form>}
+      ]} values={responses[b.Id] || (b.Status === 'AguardandoAprovacao' ? {
+        descricaoProblemaCliente: b.DescricaoProblemaCliente,
+        diagnosticoFuncionario: b.DiagnosticoFuncionario || '',
+        valorMaoDeObra: b.ValorMaoDeObra || '',
+        valorPecas: b.ValorPecas || '',
+        prazoConclusao: b.PrazoConclusao || '',
+      } : { descricaoProblemaCliente: b.DescricaoProblemaCliente })} setValues={v => setResponses({ ...responses, [b.Id]: v })} />
+        <button>{b.Status === 'EmAnalise' ? 'Responder orçamento' : 'Corrigir e reenviar'}</button></form>}
       {b.Status === 'AguardandoAprovacao' && <>
         <p className="muted">Total: {currency(Number(b.ValorMaoDeObra) + Number(b.ValorPecas))} · Até {formatDate(b.PrazoParaAprovacaoCliente)}</p>
-        {b.Origem === 'LojaImediata' ? <div className="actions">
-          <select value={decisions[b.Id] || ''} onChange={e => setDecisions({ ...decisions, [b.Id]: e.target.value })}>
-            <option value="">Responsável pela OS: quem respondeu</option>
-            {data.employees.filter(f => f.Ativo).map(f => <option key={f.Id} value={f.Id}>{f.Nome}</option>)}
-          </select>
-          <button onClick={() => act(`/orcamentos/${b.Id}/decisao`, 'POST', {
-            aprovar: true, ...(decisions[b.Id] ? { funcionarioResponsavelId: Number(decisions[b.Id]) } : {}),
-          }, 'Orçamento aprovado e OS criada.')}>Aprovar</button>
-          <button className="secondary" onClick={() => act(`/orcamentos/${b.Id}/decisao`, 'POST', { aprovar: false }, 'Orçamento recusado.')}>Recusar</button>
-        </div> : <button className="secondary" onClick={() => act(`/orcamentos/${b.Id}/reenviar`, 'POST', {}, 'Novo link enviado.')}>Reenviar link</button>}
+        <button className="secondary" onClick={() => act(`/orcamentos/${b.Id}/reenviar`, 'POST', {}, 'Novo link enviado.')}>Reenviar link</button>
       </>}
-    </div>) : <p className="muted">Nenhum orçamento.</p>}</Card></div>
+    </div>) : <p className="muted">Nenhum orçamento.</p>}</Card>
 }
 
 function Orders({ data, act }) {
@@ -389,15 +522,23 @@ function Orders({ data, act }) {
       {o.Status === 'AguardandoAparelho' && <button onClick={() => act(`/ordens-servico/${o.Id}`, 'PUT', { acao: 'receber' }, 'Aparelho recebido.')}>Receber aparelho</button>}
       {o.Status === 'AguardandoReparo' && <button onClick={() => act(`/ordens-servico/${o.Id}`, 'PUT', { acao: 'iniciar' }, 'Reparo iniciado.')}>Iniciar reparo</button>}
       {o.Status === 'EmReparo' && <button onClick={() => act(`/ordens-servico/${o.Id}`, 'PUT', { acao: 'concluir' }, 'Reparo concluído.')}>Concluir reparo</button>}
-      {(o.Status === 'ReparoConcluido' || o.Status === 'Paga') && !o.DataEntregaAparelho && <button className="secondary" onClick={() => act(`/ordens-servico/${o.Id}`, 'PUT', { acao: 'entregar' }, 'Aparelho entregue.')}>Registrar entrega</button>}
+      {o.Status === 'ReparoConcluido' && !o.DataEntregaAparelho && <button className="secondary" onClick={() => act(`/ordens-servico/${o.Id}`, 'PUT', { acao: 'entregar' }, 'Aparelho entregue.')}>Registrar entrega</button>}
+      {!['Paga', 'Cancelada', 'Desistencia'].includes(o.Status) && <>
+        <button className="secondary" onClick={() => {
+          if (window.confirm('Cancelar esta OS?')) act(`/ordens-servico/${o.Id}`, 'PUT', { acao: 'cancelar' }, 'OS cancelada.')
+        }}>Cancelar OS</button>
+        <button className="secondary" onClick={() => {
+          if (window.confirm('Registrar desistência do cliente?')) act(`/ordens-servico/${o.Id}`, 'PUT', { acao: 'desistencia' }, 'Desistência registrada.')
+        }}>Desistência</button>
+      </>}
     </div>
-    {o.Status !== 'Paga' && <form className="inline-form" onSubmit={e => {
+    {!['Paga', 'Cancelada', 'Desistencia'].includes(o.Status) && <form className="inline-form" onSubmit={e => {
       e.preventDefault()
       act(`/ordens-servico/${o.Id}`, 'PUT', { acao: 'atribuir', funcionarioResponsavelId: Number(form[o.Id]?.responsavel) }, 'Responsável atualizado.')
     }}><label>Responsável<select required value={form[o.Id]?.responsavel || ''} onChange={e => setForm({ ...form, [o.Id]: { ...form[o.Id], responsavel: e.target.value } })}>
       <option value="">Selecione</option>{data.employees.filter(f => f.Ativo).map(f => <option key={f.Id} value={f.Id}>{f.Nome}</option>)}
     </select></label><button className="secondary">Atribuir</button></form>}
-    {o.Status !== 'Paga' && <form className="inline-form" onSubmit={e => {
+    {!['Paga', 'Cancelada', 'Desistencia'].includes(o.Status) && <form className="inline-form" onSubmit={e => {
       e.preventDefault()
       act(`/ordens-servico/${o.Id}`, 'PUT', { acao: 'previsao',
         dataPrevisaoConclusao: form[o.Id]?.previsao }, 'Previsão atualizada.')
@@ -406,14 +547,24 @@ function Orders({ data, act }) {
       <button className="secondary">Atualizar previsão</button></form>}
     {o.Status === 'ReparoConcluido' && <form className="inline-form" onSubmit={e => {
       e.preventDefault()
-      act(`/ordens-servico/${o.Id}/pagamentos`, 'POST', { valor: form[o.Id]?.valor, formaPagamento: form[o.Id]?.formaPagamento }, 'Pagamento registrado.')
+      act(`/ordens-servico/${o.Id}/pagamentos`, 'POST', { valor: form[o.Id]?.valor,
+        formaPagamento: form[o.Id]?.formaPagamento, dataPagamento: form[o.Id]?.dataPagamento }, 'Pagamento registrado.')
     }}><label>Valor pago<input type="number" min="0.01" step="0.01" required value={form[o.Id]?.valor || ''} onChange={e => setForm({ ...form, [o.Id]: { ...form[o.Id], valor: e.target.value } })} /></label>
-      <label>Forma de pagamento<input required value={form[o.Id]?.formaPagamento || ''} onChange={e => setForm({ ...form, [o.Id]: { ...form[o.Id], formaPagamento: e.target.value } })} /></label><button>Registrar pagamento</button></form>}
+      <label>Forma de pagamento<input required value={form[o.Id]?.formaPagamento || ''} onChange={e => setForm({ ...form, [o.Id]: { ...form[o.Id], formaPagamento: e.target.value } })} /></label>
+      <label>Data do pagamento<input type="date" max={todayInputDate()}
+        value={form[o.Id]?.dataPagamento || todayInputDate()}
+        onChange={e => setForm({ ...form, [o.Id]: { ...form[o.Id], dataPagamento: e.target.value } })} /></label>
+      <button>Registrar pagamento</button></form>}
   </Card>) : <Card title="Ordens de serviço"><p className="muted">Nenhuma OS. Ela será criada quando um orçamento for aprovado.</p></Card>}</div>
 }
 
 function currency(value) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0)
+}
+function todayInputDate() {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 10)
 }
 function formatDate(value) {
   if (!value) return '—'
@@ -423,7 +574,7 @@ function statusLabel(value) {
   return ({ EmAnalise: 'Em análise', AguardandoAprovacao: 'Aguardando aprovação', Aprovado: 'Aprovado',
     Recusado: 'Recusado', Cancelado: 'Cancelado', AguardandoAparelho: 'Aguardando aparelho',
     AguardandoReparo: 'Aguardando reparo', EmReparo: 'Em reparo', ReparoConcluido: 'Reparo concluído',
-    Paga: 'Paga' })[value] || value
+    Paga: 'Paga', Cancelada: 'Cancelada', Desistencia: 'Desistência' })[value] || value
 }
 function originLabel(value) {
   return ({ Online: 'Online', LojaImediata: 'Loja · imediato', LojaPosterior: 'Loja · posterior' })[value] || value
